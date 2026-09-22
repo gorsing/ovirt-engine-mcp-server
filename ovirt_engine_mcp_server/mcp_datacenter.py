@@ -37,7 +37,7 @@ class DataCenterMCP(BaseMCP):
                 "name": dc.name,
                 "description": dc.description or "",
                 "status": str(dc.status.value) if dc.status else "unknown",
-                "storage_type": str(dc.storage_type.value) if dc.storage_type else "nfs",
+                "storage_type": str(dc.storage_type.value) if getattr(dc, "storage_type", None) else "nfs",
                 "version": f"{dc.version.major}.{dc.version.minor}" if dc.version else "",
                 "supported_versions": [
                     f"{v.major}.{v.minor}" for v in dc.supported_versions
@@ -86,7 +86,7 @@ class DataCenterMCP(BaseMCP):
             "name": dc.name,
             "description": dc.description or "",
             "status": str(dc.status.value) if dc.status else "unknown",
-            "storage_type": str(dc.storage_type.value) if dc.storage_type else "nfs",
+            "storage_type": str(dc.storage_type.value) if getattr(dc, "storage_type", None) else "nfs",
             "version": f"{dc.version.major}.{dc.version.minor}" if dc.version else "",
             "mac_pool": dc.mac_pool.name if dc.mac_pool else "",
             "clusters": clusters,

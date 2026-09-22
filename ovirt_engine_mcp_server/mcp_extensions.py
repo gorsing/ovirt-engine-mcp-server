@@ -478,7 +478,7 @@ class ClusterMCP(BaseMCP):
         if c.cpu:
             cpu_info = {
                 "architecture": str(c.cpu.architecture.value) if c.cpu.architecture else "x86_64",
-                "型号": str(c.cpu.id) if c.cpu.id else ""
+                "型号": str(c.cpu.id) if getattr(c.cpu, "id", None) else ""
             }
 
         return {
@@ -487,9 +487,9 @@ class ClusterMCP(BaseMCP):
             "description": c.description or "",
             "cpu_architecture": str(c.cpu.architecture.value) if c.cpu else "x86_64",
             "cpu": cpu_info,
-            "memory_gb": int((c.memory or 0) / (1024**3)),
+            "memory_gb": int((getattr(c, "memory", None) or 0) / (1024**3)),
             "version": f"{c.version.major}.{c.version.minor}" if c.version else "4.7",
-            "status": str(c.status.value) if c.status else "up",
+            "status": str(c.status.value) if getattr(c, "status", None) else "up",
             "data_center": c.data_center.name if c.data_center else "",
             "data_center_id": c.data_center.id if c.data_center else "",
             "gluster_service": c.gluster_service if hasattr(c, 'gluster_service') else False,

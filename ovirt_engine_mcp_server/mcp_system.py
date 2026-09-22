@@ -73,7 +73,7 @@ class SystemMCP(BaseMCP):
                 "vendor_name": api.product_info.vendor if api.product_info else "",
                 "version": version,
                 "summary": summary,
-                "time_zone": str(api.time_zone.name) if api.time_zone else "",
+                "time_zone": str(api.time_zone.name) if getattr(api, "time_zone", None) else "",
                 "time": str(api.time) if hasattr(api, 'time') else "",
                 "user": {
                     "name": api.user_name if hasattr(api, 'user_name') else "",
