@@ -125,7 +125,7 @@ docker run -i --rm \
 
 ## Available Tools
 
-> ⚠️ `cluster_hosts`, `cluster_vms`, `cluster_cpu_load` and
+> `cluster_hosts`, `cluster_vms`, `cluster_cpu_load` and
 > `template_vm_create` are registered but their backing methods are missing
 > — calling them returns a "Method not found" error (known issue).
 
@@ -279,9 +279,9 @@ docker run -i --rm \
 | `cluster_create` | Create cluster |
 | `cluster_update` | Update cluster |
 | `cluster_delete` | Delete cluster |
-| `cluster_hosts` ⚠️ | List hosts in a cluster (backing method missing) |
-| `cluster_vms` ⚠️ | List VMs in a cluster (backing method missing) |
-| `cluster_cpu_load` ⚠️ | Get cluster CPU load (backing method missing) |
+| `cluster_hosts` | List hosts in a cluster (backing method missing) |
+| `cluster_vms` | List VMs in a cluster (backing method missing) |
+| `cluster_cpu_load` | Get cluster CPU load (backing method missing) |
 | `cluster_memory_usage` | Get cluster memory usage |
 
 ### CPU Profiles
@@ -333,7 +333,7 @@ docker run -i --rm \
 | Tool | Description |
 |------|-------------|
 | `template_list` | List templates |
-| `template_vm_create` ⚠️ | Create VM from template (backing method missing) |
+| `template_vm_create` | Create VM from template (backing method missing) |
 
 ### Templates (Extended)
 
