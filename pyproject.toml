@@ -27,8 +27,8 @@ classifiers = [
 ]
 
 dependencies = [
-    "mcp>=1.0.0",
-    "ovirtsdk4>=4.6.0",
+    "mcp>=1.0.0,<2",
+    "ovirt-engine-sdk-python>=4.6.0",
     "pyyaml>=6.0",
     "requests>=2.31.0",
     "colorlog>=6.8.0",
