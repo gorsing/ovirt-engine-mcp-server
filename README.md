@@ -17,7 +17,7 @@ A [Model Context Protocol](https://modelcontextprotocol.io/) (MCP) server for [o
 There is no package on PyPI yet — install from source:
 
 ```bash
-git clone git@github.com:gorsing/ovirt-engine-mcp-server.git
+git clone https://github.com/imjoey/ovirt-engine-mcp-server.git
 cd ovirt-engine-mcp-server
 git checkout local-integration
 pip install -e ".[dev]"
