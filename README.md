@@ -31,7 +31,7 @@ pip install -e .
 Set environment variables (recommended):
 
 ```bash
-export OVIRT_ENGINE_URL="https://ovirt-engine.example.com"
+export OVIRT_ENGINE_URL="https://ovirt-engine.example.com/ovirt-engine/api"
 export OVIRT_ENGINE_USER="admin@internal"
 export OVIRT_ENGINE_PASSWORD="your-password"
 ```
@@ -39,7 +39,7 @@ export OVIRT_ENGINE_PASSWORD="your-password"
 Or create a `config.yaml`:
 
 ```yaml
-OVIRT_ENGINE_URL: https://ovirt-engine.example.com
+OVIRT_ENGINE_URL: https://ovirt-engine.example.com/ovirt-engine/api
 OVIRT_ENGINE_USER: admin@internal
 # OVIRT_ENGINE_PASSWORD should be set via environment variable
 ```
@@ -60,7 +60,7 @@ Add to your Claude Desktop config file (`claude_desktop_config.json`):
     "ovirt": {
       "command": "ovirt-engine-mcp",
       "env": {
-        "OVIRT_ENGINE_URL": "https://ovirt-engine.example.com",
+        "OVIRT_ENGINE_URL": "https://ovirt-engine.example.com/ovirt-engine/api",
         "OVIRT_ENGINE_USER": "admin@internal",
         "OVIRT_ENGINE_PASSWORD": "your-password"
       }
@@ -73,9 +73,26 @@ Add to your Claude Desktop config file (`claude_desktop_config.json`):
 
 ```bash
 docker build -t ovirt-engine-mcp-server .
-docker run -e OVIRT_ENGINE_URL=https://ovirt-engine.example.com \
+
+# -i keeps stdin open: the server speaks MCP over stdio and exits on EOF.
+docker run -i --rm \
+           -e OVIRT_ENGINE_URL=https://ovirt-engine.example.com/ovirt-engine/api \
            -e OVIRT_ENGINE_USER=admin@internal \
            -e OVIRT_ENGINE_PASSWORD=your-password \
+           ovirt-engine-mcp-server
+```
+
+TLS: the engine certificate must match the host in `OVIRT_ENGINE_URL`. For
+engines with self-signed certificates either mount your CA and set
+`OVIRT_ENGINE_CA_FILE`, or set `OVIRT_ENGINE_INSECURE=true` to skip
+certificate verification (traffic is then vulnerable to man-in-the-middle):
+
+```bash
+docker run -i --rm \
+           -e OVIRT_ENGINE_URL=https://ovirt-engine.example.com/ovirt-engine/api \
+           -e OVIRT_ENGINE_USER=admin@internal \
+           -e OVIRT_ENGINE_PASSWORD=your-password \
+           -e OVIRT_ENGINE_INSECURE=true \
            ovirt-engine-mcp-server
 ```
 
