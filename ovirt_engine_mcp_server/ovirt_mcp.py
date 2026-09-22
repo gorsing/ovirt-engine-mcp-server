@@ -97,6 +97,7 @@ class OvirtMCP:
                     username=self.config.ovirt_engine_user,
                     password=self.config.ovirt_engine_password,
                     ca_file=self.config.ovirt_engine_ca_file or None,
+                    insecure=self.config.ovirt_engine_insecure,
                     timeout=self.config.ovirt_engine_timeout,
                 )
                 self.connection.test()
@@ -162,6 +163,7 @@ class OvirtMCP:
                         username=self.config.ovirt_engine_user,
                         password=self.config.ovirt_engine_password,
                         ca_file=self.config.ovirt_engine_ca_file or None,
+                        insecure=self.config.ovirt_engine_insecure,
                         timeout=self.config.ovirt_engine_timeout,
                     )
                     self.connection.test()
