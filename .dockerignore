@@ -1,0 +1,28 @@
+# Keep the build context small and reproducible.
+.git
+.github
+.gitignore
+
+# Virtualenv and local tooling (140+ MB)
+.venv
+venv
+.env
+
+# Python artifacts
+__pycache__
+*.py[cod]
+*.egg-info
+build
+dist
+
+# Tests and local docs not needed inside the image
+tests
+run_tests.py
+INSTALL.md
+REVIEW.md
+CODE_OF_CONDUCT.md
+CONTRIBUTING.md
+SECURITY.md
+
+# NOTE: README.md and LICENSE must stay in the context — pyproject.toml
+# references them (readme = "README.md") during the build.
