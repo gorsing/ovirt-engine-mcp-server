@@ -97,6 +97,7 @@ class OvirtMCP:
                     username=self.config.ovirt_engine_user,
                     password=self.config.ovirt_engine_password,
                     ca_file=self.config.ovirt_engine_ca_file or None,
+                    insecure=self.config.ovirt_engine_insecure,
                     timeout=self.config.ovirt_engine_timeout,
                 )
                 self.connection.test()
@@ -162,6 +163,7 @@ class OvirtMCP:
                         username=self.config.ovirt_engine_user,
                         password=self.config.ovirt_engine_password,
                         ca_file=self.config.ovirt_engine_ca_file or None,
+                        insecure=self.config.ovirt_engine_insecure,
                         timeout=self.config.ovirt_engine_timeout,
                     )
                     self.connection.test()
@@ -878,8 +880,8 @@ class OvirtMCP:
                 "cluster": h.cluster.name if h.cluster else "",
                 "cpu_cores": h.cpu.topology.cores if h.cpu and h.cpu.topology else 0,
                 "memory_gb": int((h.memory or 0) / (1024**3)),
-                "cpu_usage": h.usage_cpu_percent or 0,
-                "memory_usage": h.usage_memory_percent or 0
+                "cpu_usage": getattr(h, "usage_cpu_percent", None) or 0,
+                "memory_usage": getattr(h, "usage_memory_percent", None) or 0
             })
         if cluster:
             result = [h for h in result if h["cluster"] == cluster]
@@ -936,8 +938,8 @@ class OvirtMCP:
             "cpu_sockets": h.cpu.topology.sockets if h.cpu and h.cpu.topology else 0,
             "cpu_threads": h.cpu.topology.threads if h.cpu and h.cpu.topology else 0,
             "memory_gb": int((h.memory or 0) / (1024**3)),
-            "cpu_usage": h.usage_cpu_percent or 0,
-            "memory_usage": h.usage_memory_percent or 0,
+            "cpu_usage": getattr(h, "usage_cpu_percent", None) or 0,
+            "memory_usage": getattr(h, "usage_memory_percent", None) or 0,
             "os_type": h.os.type if h.os else "",
             "os_version": str(h.os.version.full_version) if h.os and h.os.version else "",
             "spm_status": str(h.spm.status.value) if h.spm and h.spm.status else "none",
@@ -1476,7 +1478,7 @@ class OvirtMCP:
                 "id": c.id,
                 "name": c.name,
                 "cpu_architecture": str(c.cpu.architecture.value) if c.cpu else "x86_64",
-                "memory_gb": int((c.memory or 0) / (1024**3)),
+                "memory_gb": int((getattr(c, "memory", None) or 0) / (1024**3)),
                 "description": c.description or ""
             }
             for c in clusters
@@ -1652,7 +1654,7 @@ class OvirtMCP:
                 "id": d.id,
                 "name": d.alias or d.id,
                 "size_gb": int((d.provisioned_size or 0) / (1024**3)),
-                "format": str(d.storage_format.value) if d.storage_format else "unknown",
+                "format": str(d.storage_format.value) if getattr(d, "storage_format", None) else (str(d.format.value) if getattr(d, "format", None) else "unknown"),
                 "status": str(d.status.value) if d.status else "unknown",
             }
             for d in disks
@@ -1922,7 +1924,7 @@ class OvirtMCP:
             "name": disk.alias or disk.id,
             "size_gb": int((disk.provisioned_size or 0) / (1024**3)),
             "actual_size_gb": int((disk.actual_size or 0) / (1024**3)),
-            "format": str(disk.storage_format.value) if disk.storage_format else "cow",
+            "format": str(disk.storage_format.value) if getattr(disk, "storage_format", None) else (str(disk.format.value) if getattr(disk, "format", None) else "cow"),
             "status": str(disk.status.value) if disk.status else "unknown",
             "storage_domain": disk.storage_domains[0].id if disk.storage_domains else None,
             "interface": str(disk.interface.value) if disk.interface else "virtio",
