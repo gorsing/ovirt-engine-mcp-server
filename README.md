@@ -1,34 +1,49 @@
 # oVirt MCP Server
 
-A [Model Context Protocol](https://modelcontextprotocol.io/) (MCP) server for [oVirt](https://www.ovirt.org/) / RHV virtualization management. Provides 150+ tools for managing VMs, hosts, clusters, networks, storage, templates, snapshots, disks, events, affinity groups, RBAC, quotas, checkpoints, migrations, VM pools, and more — enabling AI assistants like Claude to interact with your virtualization infrastructure.
+A [Model Context Protocol](https://modelcontextprotocol.io/) (MCP) server for [oVirt](https://www.ovirt.org/) / RHV virtualization management. Provides 180+ tools (182 registered) for managing VMs, hosts, clusters, networks, storage, templates, snapshots, disks, events, affinity groups, RBAC, quotas, checkpoints, migrations, VM pools, and more — enabling AI assistants like Claude to interact with your virtualization infrastructure.
 
 ## Features
 
-- **150+ MCP Tools** — Full lifecycle management for VMs, hosts, clusters, networks, storage, templates, snapshots, disks, events, affinity groups, RBAC, quotas, checkpoints, migrations, VM pools, and more
+- **180+ MCP Tools** — Full lifecycle management for VMs, hosts, clusters, networks, storage, templates, snapshots, disks, events, affinity groups, RBAC, quotas, checkpoints, migrations, VM pools, and more
 - **Real SDK Integration** — Built on [ovirtsdk4](https://github.com/oVirt/ovirt-engine-sdk-python), the official oVirt Python SDK
 - **Stdio Transport** — Works out of the box with Claude Desktop, OpenClaw, and any MCP-compatible client
 - **Structured Errors** — Clear error codes and retry guidance
-- **Input Validation** — Type-safe parameter validation for all tools
+- **Input Validation** — JSON-schema type checking for every tool, plus dedicated validators for the most common tools (`vm_create`, `snapshot_*`, `disk_create`, `host_*`, ...)
 
 ## Quick Start
 
 ### 1. Install
 
-```bash
-pip install ovirt-engine-mcp-server
-```
-
-Or from source:
+There is no package on PyPI yet — install from source:
 
 ```bash
-git clone https://github.com/imjoey/ovirt-engine-mcp-server.git
+git clone git@github.com:gorsing/ovirt-engine-mcp-server.git
 cd ovirt-engine-mcp-server
-pip install -e .
+git checkout local-integration
+pip install -e ".[dev]"
 ```
+
+> **Note:** install from the `local-integration` branch (or any `fix/*`
+> branch). On a plain upstream `main` the install fails: the `pyproject.toml`
+> still references the removed PyPI package `ovirtsdk4` (the real
+> distribution is `ovirt-engine-sdk-python`) and does not pin `mcp<2`.
+>
+> Building `ovirt-engine-sdk-python` requires a compiler and libxml2 headers
+> (`gcc` + `libxml2-devel` on RHEL-family, `gcc` + `libxml2-dev` on
+> Debian-family).
 
 ### 2. Configure
 
 Set environment variables (recommended):
+
+| Variable | Required | Purpose |
+|---|---|---|
+| `OVIRT_ENGINE_URL` | yes | **must end with** `/ovirt-engine/api`, e.g. `https://ovirt-engine.example.com/ovirt-engine/api` |
+| `OVIRT_ENGINE_USER` | yes | e.g. `admin@internal` (the domain part is mandatory) |
+| `OVIRT_ENGINE_PASSWORD` | yes | password (env-only recommended) |
+| `OVIRT_ENGINE_CA_FILE` | no | path to a CA certificate |
+| `OVIRT_ENGINE_TIMEOUT` | no | connection timeout, seconds |
+| `OVIRT_ENGINE_INSECURE` | no | `true` — skip TLS verification |
 
 ```bash
 export OVIRT_ENGINE_URL="https://ovirt-engine.example.com/ovirt-engine/api"
@@ -43,6 +58,14 @@ OVIRT_ENGINE_URL: https://ovirt-engine.example.com/ovirt-engine/api
 OVIRT_ENGINE_USER: admin@internal
 # OVIRT_ENGINE_PASSWORD should be set via environment variable
 ```
+
+> **TLS:** the certificate must match the host in `OVIRT_ENGINE_URL`. For
+> engines with self-signed certificates either set `OVIRT_ENGINE_CA_FILE`,
+> or set `OVIRT_ENGINE_INSECURE=true` (verification is then skipped — the
+> connection is vulnerable to man-in-the-middle).
+>
+> If the URL does not end with `/ovirt-engine/api`, the SDK fails with
+> `content type text/html isn't the expected XML`.
 
 ### 3. Run
 
@@ -82,6 +105,10 @@ docker run -i --rm \
            ovirt-engine-mcp-server
 ```
 
+The image runs as an unprivileged `mcp` user (not root). Its healthcheck
+performs a real connection test via
+`python -m ovirt_engine_mcp_server.healthcheck`.
+
 TLS: the engine certificate must match the host in `OVIRT_ENGINE_URL`. For
 engines with self-signed certificates either mount your CA and set
 `OVIRT_ENGINE_CA_FILE`, or set `OVIRT_ENGINE_INSECURE=true` to skip
@@ -97,6 +124,10 @@ docker run -i --rm \
 ```
 
 ## Available Tools
+
+> ⚠️ `cluster_hosts`, `cluster_vms`, `cluster_cpu_load` and
+> `template_vm_create` are registered but their backing methods are missing
+> — calling them returns a "Method not found" error (known issue).
 
 ### Virtual Machines (Core)
 
@@ -248,9 +279,9 @@ docker run -i --rm \
 | `cluster_create` | Create cluster |
 | `cluster_update` | Update cluster |
 | `cluster_delete` | Delete cluster |
-| `cluster_hosts` | List hosts in a cluster |
-| `cluster_vms` | List VMs in a cluster |
-| `cluster_cpu_load` | Get cluster CPU load |
+| `cluster_hosts` ⚠️ | List hosts in a cluster (backing method missing) |
+| `cluster_vms` ⚠️ | List VMs in a cluster (backing method missing) |
+| `cluster_cpu_load` ⚠️ | Get cluster CPU load (backing method missing) |
 | `cluster_memory_usage` | Get cluster memory usage |
 
 ### CPU Profiles
@@ -302,7 +333,7 @@ docker run -i --rm \
 | Tool | Description |
 |------|-------------|
 | `template_list` | List templates |
-| `template_vm_create` | Create VM from template |
+| `template_vm_create` ⚠️ | Create VM from template (backing method missing) |
 
 ### Templates (Extended)
 
@@ -445,7 +476,7 @@ docker run -i --rm \
 │                              │
 │  ┌─────────────────────────┐ │
 │  │  OvirtMCP (ovirt_mcp)   │ │  ← Core SDK wrapper
-│  │  150+ methods            │ │
+│  │  180+ methods            │ │
 │  ├─────────────────────────┤ │
 │  │  Extension Modules      │ │
 │  │  - NetworkMCP           │ │
@@ -476,17 +507,20 @@ docker run -i --rm \
 # Install dev dependencies
 pip install -e ".[dev]"
 
-# Run tests
-pytest tests/ -v
+# Run tests (220 unit tests; no real oVirt needed)
+pytest tests/ -m "not integration" -v
 
-# Lint
-ruff check src/ tests/
+# Lint (the package lives in the repo root — there is no src/ directory)
+ruff check ovirt_engine_mcp_server/ tests/
 ```
 
 ## Requirements
 
 - Python >= 3.10
-- oVirt Engine 4.4+
+- C toolchain: `gcc` + `libxml2-devel` (`libxml2-dev` on Debian-family) —
+  required to build `ovirt-engine-sdk-python`
+- oVirt Engine 4.4+ (verified against 4.5.8)
+- podman or docker (optional, for the container image)
 
 ## License
 
