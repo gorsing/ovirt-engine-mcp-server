@@ -23,11 +23,6 @@ git checkout local-integration
 pip install -e ".[dev]"
 ```
 
-> **Note:** install from the `local-integration` branch (or any `fix/*`
-> branch). On a plain upstream `main` the install fails: the `pyproject.toml`
-> still references the removed PyPI package `ovirtsdk4` (the real
-> distribution is `ovirt-engine-sdk-python`) and does not pin `mcp<2`.
->
 > Building `ovirt-engine-sdk-python` requires a compiler and libxml2 headers
 > (`gcc` + `libxml2-devel` on RHEL-family, `gcc` + `libxml2-dev` on
 > Debian-family).
