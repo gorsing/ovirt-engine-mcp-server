@@ -12,7 +12,8 @@ from datetime import datetime
 from enum import Enum
 
 from .config import sanitize_log_message, Config
-from .errors import OvirtTimeoutError
+from .errors import NotFoundError, OvirtTimeoutError
+from .links import LinkNameMixin
 
 try:
     import ovirtsdk4 as sdk
@@ -77,7 +78,7 @@ class DiskInfo:
     format: str
 
 
-class OvirtMCP:
+class OvirtMCP(LinkNameMixin):
     """oVirt MCP 工具集 - 完整的运维能力"""
     
     def __init__(self, config: "Config") -> None:
@@ -208,42 +209,136 @@ class OvirtMCP:
         
         # 尝试名称
         vms = vms_service.list(search=f"name={_sanitize_search_value(name_or_id)}")
-        return self._map_vm_full(vms[0]) if vms else None
-    
+        if not vms:
+            raise NotFoundError(f"VM not found: {name_or_id}")
+        return self._map_vm_full(vms[0])
+
+    def _fetch_vm_disks(self, vm_id: str) -> List[Dict[str, Any]]:
+        """Disks attached to a VM.
+
+        ``Vm`` and ``DiskAttachment`` expose no ``*_service()`` methods in
+        ovirtsdk4 4.6 — the sub-collections have to be reached through
+        services. The old object-based call raised ``AttributeError`` inside a
+        broad ``except``, so every VM silently reported zero disks.
+        """
+        disks: List[Dict[str, Any]] = []
+        try:
+            attachments = (
+                self.connection.system_service()
+                .vms_service()
+                .vm_service(vm_id)
+                .disk_attachments_service()
+                .list()
+            )
+        except Exception as e:
+            logger.debug(f"Failed to list disk attachments for {vm_id}: {e}")
+            return disks
+
+        disks_service = self.connection.system_service().disks_service()
+        for da in attachments:
+            # the attachment only carries the disk id — follow it for details
+            disk = disks_service.disk_service(da.disk.id).get()
+            disks.append({
+                "id": disk.id,
+                "name": disk.alias or disk.id,
+                "size_gb": int((disk.provisioned_size or 0) / (1024**3)),
+                "status": str(disk.status.value) if disk.status else "unknown",
+                "bootable": bool(da.bootable),
+                "interface": str(da.interface.value) if da.interface else "virtio",
+            })
+        return disks
+
+    def _fetch_vm_nics(self, vm_id: str) -> List[Dict[str, Any]]:
+        """NICs attached to a VM (see ``_fetch_vm_disks`` for the caveat)."""
+        nics: List[Dict[str, Any]] = []
+        try:
+            nic_list = (
+                self.connection.system_service()
+                .vms_service()
+                .vm_service(vm_id)
+                .nics_service()
+                .list()
+            )
+        except Exception as e:
+            logger.debug(f"Failed to list NICs for {vm_id}: {e}")
+            return nics
+
+        for nic in nic_list:
+            # live NIC payloads carry the VNIC profile; the network has to be
+            # reached through it when ``nic.network`` is not populated
+            profile_ref = getattr(nic, "vnic_profile", None)
+            profile = self._link_obj("vnic_profile", profile_ref)
+            network_ref = getattr(nic, "network", None)
+            if not network_ref and profile is not None:
+                network_ref = getattr(profile, "network", None)
+
+            if profile is not None and profile.name:
+                profile_name = profile.name
+            else:
+                profile_name = getattr(profile_ref, "name", None) or ""
+
+            nics.append({
+                "id": nic.id,
+                "name": nic.name,
+                "mac": nic.mac.address if nic.mac else "",
+                "network": self._network_name(network_ref),
+                "vnic_profile": profile_name,
+                "linked": bool(nic.linked),
+            })
+        return nics
+
+    def _host_usage(self, host_id: str) -> Dict[str, float]:
+        """CPU / memory utilisation (percent) for one host.
+
+        ``Host`` carries no usage attributes — the numbers live in the host's
+        statistics (``cpu.current.*`` are percent, ``memory.*`` are bytes), so
+        reading ``usage_cpu_percent`` always produced 0.
+        """
+        usage: Dict[str, float] = {"cpu_usage": 0.0, "memory_usage": 0.0}
+        try:
+            stats = (
+                self.connection.system_service()
+                .hosts_service()
+                .host_service(host_id)
+                .statistics_service()
+                .list()
+            )
+        except Exception as e:
+            logger.debug(f"Failed to read statistics for host {host_id}: {e}")
+            return usage
+
+        raw: Dict[str, float] = {}
+        for stat in stats:
+            if stat.values:
+                datum = getattr(stat.values[0], "datum", None)
+                if datum is not None:
+                    try:
+                        raw[stat.name] = float(datum)
+                    except (TypeError, ValueError):
+                        pass
+
+        idle = raw.get("cpu.current.idle")
+        if idle is not None:
+            usage["cpu_usage"] = round(min(100.0, max(0.0, 100.0 - idle)), 1)
+
+        used = raw.get("memory.used")
+        total = raw.get("memory.total")
+        if used is not None and total:
+            usage["memory_usage"] = round(min(100.0, used / total * 100.0), 1)
+        elif used is not None:
+            free = raw.get("memory.free") or 0.0
+            if used + free > 0:
+                usage["memory_usage"] = round(
+                    min(100.0, used / (used + free) * 100.0), 1
+                )
+
+        return usage
+
     def _map_vm_full(self, vm: Any) -> VMInfo:
         """映射完整 VM 信息"""
-        # 获取磁盘
-        disks = []
-        try:
-            disk_attachments = vm.disk_attachments_service().list()
-            for da in disk_attachments:
-                try:
-                    disk = da.disk_service().get()
-                    disks.append({
-                        "id": disk.id,
-                        "name": disk.name,
-                        "size_gb": int((disk.provisioned_size or 0) / (1024**3)),
-                        "status": str(disk.status.value) if disk.status else "unknown"
-                    })
-                except Exception as e:
-                    logger.debug(f"Failed to get disk info: {e}")
-        except Exception as e:
-            logger.debug(f"Failed to list disk attachments: {e}")
-        
-        # 获取网卡
-        nics = []
-        try:
-            nic_service = vm.nics_service()
-            for nic in nic_service.list():
-                nics.append({
-                    "id": nic.id,
-                    "name": nic.name,
-                    "mac": nic.mac.address if nic.mac else "",
-                    "network": nic.network.name if nic.network else ""
-                })
-        except Exception as e:
-            logger.debug(f"Failed to list NICs: {e}")
-        
+        disks = self._fetch_vm_disks(vm.id)
+        nics = self._fetch_vm_nics(vm.id)
+
         return VMInfo(
             id=vm.id,
             name=vm.name,
@@ -251,8 +346,8 @@ class OvirtMCP:
             cpu_cores=vm.cpu.topology.cores if vm.cpu and vm.cpu.topology else 1,
             cpu_threads=vm.cpu.topology.threads if vm.cpu and vm.cpu.topology else 1,
             memory_mb=int(vm.memory / (1024*1024)) if vm.memory else 0,
-            cluster=vm.cluster.name if vm.cluster else "",
-            host=vm.host.name if vm.host else "",
+            cluster=self._cluster_name(vm.cluster),
+            host=self._host_name(vm.host),
             description=vm.description or "",
             creation_time=str(vm.creation_time) if vm.creation_time else "",
             os_type=vm.os.type if vm.os else "",
@@ -373,6 +468,58 @@ class OvirtMCP:
         
         return {"success": True, "message": f"虚拟机 {vm['name']} 已删除", "vm_id": vm["id"]}
     
+    def rename_vm(self, name_or_id: str, new_name: str) -> Dict[str, Any]:
+        """重命名虚拟机
+
+        Args:
+            name_or_id: VM 当前名称或 ID
+            new_name: 新名称
+
+        Returns:
+            重命名结果
+        """
+        self._ensure_connected()
+
+        if not new_name or not new_name.strip():
+            raise ValueError("new_name 不能为空")
+        new_name = new_name.strip()
+
+        vm = self._find_vm(name_or_id)
+        if not vm:
+            raise NotFoundError(f"VM not found: {name_or_id}")
+
+        old_name = vm["name"]
+        if old_name == new_name:
+            return {
+                "success": True,
+                "message": f"虚拟机 {old_name} 名称未变",
+                "vm_id": vm["id"],
+                "old_name": old_name,
+                "new_name": new_name,
+            }
+
+        vms_service = self.connection.system_service().vms_service()
+
+        # 拒绝与其它 VM 重名（Engine 自身也会拒绝，但提前给出清晰错误）
+        existing = vms_service.list(search=f"name={_sanitize_search_value(new_name)}")
+        if existing and existing[0].id != vm["id"]:
+            raise ValueError(f"虚拟机已存在: {new_name}")
+
+        vm_service = vms_service.vm_service(vm["id"])
+        current = vm_service.get()
+        current.name = new_name
+        vm_service.update(current)
+
+        logger.info(f"Renamed VM {old_name} -> {new_name} ({vm['id']})")
+
+        return {
+            "success": True,
+            "message": f"虚拟机 {old_name} 已重命名为 {new_name}",
+            "vm_id": vm["id"],
+            "old_name": old_name,
+            "new_name": new_name,
+        }
+
     def update_vm_resources(self, name_or_id: str, memory_mb: int = None, cpu_cores: int = None) -> Dict[str, Any]:
         """更新 VM 资源（热添加）"""
         vm = self._find_vm(name_or_id)
@@ -692,7 +839,7 @@ class OvirtMCP:
                 "name": n.name,
                 "description": n.description or "",
                 "vlan_id": n.vlan.id if n.vlan else None,
-                "cluster": n.cluster.name if n.cluster else "",
+                "cluster": self._cluster_name(n.cluster),
                 "status": str(n.status.value) if n.status else "operational"
             }
             for n in networks
@@ -719,7 +866,7 @@ class OvirtMCP:
             "mtu": net.mtu if net.mtu else 1500,
             "status": str(net.status.value) if net.status else "operational",
             "datacenter_id": net.data_center.id if net.data_center else "",
-            "cluster": net.cluster.name if net.cluster else "",
+            "cluster": self._cluster_name(net.cluster),
             "usages": [str(u.value) for u in net.usages] if net.usages else [],
         }
     
@@ -878,15 +1025,16 @@ class OvirtMCP:
         
         result = []
         for h in hosts:
+            usage = self._host_usage(h.id)
             result.append({
                 "id": h.id,
                 "name": h.name,
                 "status": str(h.status.value) if h.status else "unknown",
-                "cluster": h.cluster.name if h.cluster else "",
+                "cluster": self._cluster_name(h.cluster),
                 "cpu_cores": h.cpu.topology.cores if h.cpu and h.cpu.topology else 0,
                 "memory_gb": int((h.memory or 0) / (1024**3)),
-                "cpu_usage": getattr(h, "usage_cpu_percent", None) or 0,
-                "memory_usage": getattr(h, "usage_memory_percent", None) or 0
+                "cpu_usage": usage["cpu_usage"],
+                "memory_usage": usage["memory_usage"]
             })
         if cluster:
             result = [h for h in result if h["cluster"] == cluster]
@@ -937,7 +1085,7 @@ class OvirtMCP:
             "id": h.id,
             "name": h.name,
             "status": str(h.status.value) if h.status else "unknown",
-            "cluster": h.cluster.name if h.cluster else "",
+            "cluster": self._cluster_name(h.cluster),
             "address": h.address or "",
             "cpu_cores": h.cpu.topology.cores if h.cpu and h.cpu.topology else 0,
             "cpu_sockets": h.cpu.topology.sockets if h.cpu and h.cpu.topology else 0,
@@ -1750,7 +1898,9 @@ class OvirtMCP:
         """List storage server connections"""
         self._ensure_connected()
         
-        connections_service = self.connection.system_service().storage_server_connections_service()
+        # NB: the collection is ``storageconnections``; SystemService has no
+        # ``storage_server_connections_service``
+        connections_service = self.connection.system_service().storage_connections_service()
         connections = connections_service.list()
         
         if name_or_id:
@@ -1923,7 +2073,9 @@ class OvirtMCP:
         vm_id = None
         if hasattr(disk, 'vm') and disk.vm:
             vm_id = disk.vm.id
-        
+
+        storage_domain = self._storage_domain_ref(disk)
+
         return {
             "id": disk.id,
             "name": disk.alias or disk.id,
@@ -1931,7 +2083,8 @@ class OvirtMCP:
             "actual_size_gb": int((disk.actual_size or 0) / (1024**3)),
             "format": str(disk.storage_format.value) if getattr(disk, "storage_format", None) else (str(disk.format.value) if getattr(disk, "format", None) else "cow"),
             "status": str(disk.status.value) if disk.status else "unknown",
-            "storage_domain": disk.storage_domains[0].id if disk.storage_domains else None,
+            "storage_domain": self._storage_domain_name(storage_domain) if storage_domain else "",
+            "storage_domain_id": storage_domain.id if storage_domain else "",
             "interface": str(disk.interface.value) if disk.interface else "virtio",
             "sparse": disk.sparse if disk.sparse is not None else True,
             "shareable": disk.shareable if disk.shareable is not None else False,

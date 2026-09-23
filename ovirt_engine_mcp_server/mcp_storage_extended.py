@@ -337,7 +337,20 @@ class StorageExtendedMCP(BaseMCP):
         Returns:
             存储连接列表
         """
-        connections_service = self.connection.system_service().storage_connections_service()
+        if name_or_id:
+            # scope to one storage domain — its connections are served by the
+            # domain service, not by the system-level collection
+            sd = self._find_storage_domain(name_or_id)
+            if not sd:
+                raise ValueError(f"存储域不存在: {name_or_id}")
+            sd_service = (
+                self.connection.system_service()
+                .storage_domains_service()
+                .storage_domain_service(sd.id)
+            )
+            connections_service = sd_service.storage_connections_service()
+        else:
+            connections_service = self.connection.system_service().storage_connections_service()
 
         try:
             connections = connections_service.list()
@@ -350,9 +363,10 @@ class StorageExtendedMCP(BaseMCP):
                 "id": c.id,
                 "address": c.address if hasattr(c, 'address') else "",
                 "type": str(c.type.value) if hasattr(c, 'type') and c.type else "",
-                "path": c.path if hasattr(c, 'path') else "",
-                "port": c.port if hasattr(c, 'port') else 0,
-                "mount_options": c.mount_options if hasattr(c, 'mount_options') else "",
+                "path": c.path if getattr(c, "path", None) else "",
+                # live payloads leave `port` as None — don't leak it into output
+                "port": c.port if getattr(c, "port", None) is not None else "",
+                "mount_options": c.mount_options if getattr(c, "mount_options", None) else "",
                 "nfs_version": str(c.nfs_version.value) if hasattr(c, 'nfs_version') and c.nfs_version else "",
             }
             for c in connections
@@ -548,23 +562,27 @@ class StorageExtendedMCP(BaseMCP):
         Returns:
             iSCSI Bond 列表
         """
-        bonds_service = self.connection.system_service().iscsi_bonds_service()
+        # iSCSI bonds are data-center-scoped; SystemService has no
+        # ``iscsi_bonds_service`` (the old lookup crashed with AttributeError).
+        dcs_service = self.connection.system_service().data_centers_service()
 
-        try:
-            bonds = bonds_service.list()
-        except Exception as e:
-            logger.error(f"获取 iSCSI Bond 列表失败: {e}")
-            return []
+        result = []
+        for dc in dcs_service.list():
+            try:
+                bonds = dcs_service.data_center_service(dc.id).iscsi_bonds_service().list()
+            except Exception as e:
+                logger.error(f"获取 iSCSI Bond 列表失败: {e}")
+                continue
 
-        return [
-            {
-                "id": b.id,
-                "name": b.name,
-                "description": b.description if hasattr(b, 'description') else "",
-                "data_center": b.data_center.name if hasattr(b, 'data_center') and b.data_center else "",
-            }
-            for b in bonds
-        ]
+            for b in bonds:
+                result.append({
+                    "id": b.id,
+                    "name": b.name,
+                    "description": b.description if hasattr(b, 'description') else "",
+                    "data_center": self._data_center_name(b.data_center) or dc.name,
+                })
+
+        return result
 
 
 # MCP 工具注册表

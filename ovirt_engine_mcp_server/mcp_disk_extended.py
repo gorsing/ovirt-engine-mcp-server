@@ -32,26 +32,37 @@ class DiskExtendedMCP(BaseMCP):
             return None
 
         # 获取磁盘附加信息
+        # oVirt has no system-level disk_attachments_service, and
+        # ``Disk.vms`` is what tells us where the disk is attached (it comes
+        # back empty on some engines — then we simply report no attachments).
         attachments = []
-        try:
-            disk_service = self.connection.system_service().disks_service().disk_service(disk.id)
-            attachments_service = disk_service.disk_attachments_service() if hasattr(disk_service, 'disk_attachments_service') else None
-
-            # 通过全局磁盘附件服务查找
-            all_attachments = self.connection.system_service().disk_attachments_service().list(
-                search=f"disk_id={disk.id}"
-            ) if hasattr(self.connection.system_service(), 'disk_attachments_service') else []
-
-            for att in all_attachments:
+        for vm_ref in getattr(disk, "vms", None) or []:
+            try:
+                vm_attachments = (
+                    self.connection.system_service()
+                    .vms_service()
+                    .vm_service(vm_ref.id)
+                    .disk_attachments_service()
+                    .list()
+                )
+            except Exception as e:
+                logger.debug(f"获取 VM {vm_ref.id} 的磁盘附件失败: {e}")
+                continue
+            for att in vm_attachments:
+                if not att.disk or att.disk.id != disk.id:
+                    continue
                 attachments.append({
-                    "vm_id": att.vm.id if att.vm else "",
-                    "vm_name": att.vm.name if att.vm else "",
-                    "active": att.active if hasattr(att, 'active') else False,
-                    "bootable": att.bootable if hasattr(att, 'bootable') else False,
+                    "vm_id": vm_ref.id,
+                    "vm_name": self._vm_name(vm_ref),
+                    "active": bool(getattr(att, "active", False)),
+                    "bootable": bool(getattr(att, "bootable", False)),
                     "interface": str(att.interface.value) if att.interface else "virtio",
                 })
-        except Exception as e:
-            logger.debug(f"获取磁盘附件失败: {e}")
+
+        # ``Disk.storage_domain`` is None on live engines; the populated
+        # reference is ``storage_domains`` (and it carries an id, not a name).
+        storage_domains = getattr(disk, "storage_domains", None) or []
+        storage_domain = storage_domains[0] if storage_domains else None
 
         return {
             "id": disk.id,
@@ -64,8 +75,8 @@ class DiskExtendedMCP(BaseMCP):
             "storage_type": str(disk.storage_type.value) if disk.storage_type else "image",
             "sparse": disk.sparse if hasattr(disk, 'sparse') else True,
             "interface": str(disk.interface.value) if disk.interface else "virtio",
-            "storage_domain": disk.storage_domain.name if disk.storage_domain else "",
-            "storage_domain_id": disk.storage_domain.id if disk.storage_domain else "",
+            "storage_domain": self._storage_domain_name(storage_domain),
+            "storage_domain_id": storage_domain.id if storage_domain else "",
             "shareable": disk.shareable if hasattr(disk, 'shareable') else False,
             "wipe_after_delete": disk.wipe_after_delete if hasattr(disk, 'wipe_after_delete') else False,
             "propagate_errors": disk.propagate_errors if hasattr(disk, 'propagate_errors') else False,

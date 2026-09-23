@@ -24,6 +24,87 @@ class TemplateExtendedMCP(BaseMCP):
     def __init__(self, ovirt_mcp):
         super().__init__(ovirt_mcp)
 
+    def _template_disks(self, template_id: str) -> List[Dict]:
+        """Disk attachments of a template.
+
+        ``Template`` / ``DiskAttachment`` expose no ``*_service()`` methods in
+        ovirtsdk4 4.6 — the sub-collections must be reached through services.
+        The old object-based calls raised ``AttributeError`` inside the
+        caller's broad ``except``, so templates always reported zero disks.
+        """
+        disks: List[Dict] = []
+        try:
+            attachments = (
+                self.connection.system_service()
+                .templates_service()
+                .template_service(template_id)
+                .disk_attachments_service()
+                .list()
+            )
+        except Exception as e:
+            logger.debug(f"获取模板磁盘附件失败: {e}")
+            return disks
+
+        disks_service = self.connection.system_service().disks_service()
+        for da in attachments:
+            try:
+                disk = disks_service.disk_service(da.disk.id).get()
+            except Exception as e:
+                logger.debug(f"获取模板磁盘详情失败: {e}")
+                continue
+            storage_domains = getattr(disk, "storage_domains", None) or []
+            sd = storage_domains[0] if storage_domains else None
+            fmt = getattr(disk, "storage_format", None) or getattr(
+                disk, "format", None
+            )
+            disks.append({
+                "id": disk.id,
+                "name": getattr(disk, "alias", None) or disk.id,
+                "size_gb": int((disk.provisioned_size or 0) / (1024**3)),
+                "actual_size_gb": int((disk.actual_size or 0) / (1024**3)),
+                "format": str(fmt.value) if fmt else "cow",
+                "storage_domain": self._storage_domain_name(sd),
+                "interface": str(da.interface.value) if da.interface else "virtio",
+                "bootable": bool(da.bootable),
+            })
+        return disks
+
+    def _template_nics(self, template_id: str) -> List[Dict]:
+        """NICs of a template (see ``_template_disks`` for the caveat)."""
+        nics: List[Dict] = []
+        try:
+            nic_list = (
+                self.connection.system_service()
+                .templates_service()
+                .template_service(template_id)
+                .nics_service()
+                .list()
+            )
+        except Exception as e:
+            logger.debug(f"获取模板网卡失败: {e}")
+            return nics
+
+        for n in nic_list:
+            vnic_profile = getattr(n, "vnic_profile", None)
+            profile_obj = self._link_obj("vnic_profile", vnic_profile)
+            network_ref = getattr(n, "network", None)
+            if not network_ref and profile_obj is not None:
+                network_ref = getattr(profile_obj, "network", None)
+            if profile_obj is not None and profile_obj.name:
+                profile_name = profile_obj.name
+            else:
+                profile_name = getattr(vnic_profile, "name", None) or ""
+            nics.append({
+                "id": n.id,
+                "name": n.name,
+                "mac": n.mac.address if n.mac else "",
+                "network": self._network_name(network_ref),
+                "interface": str(n.interface.value) if n.interface else "virtio",
+                "linked": bool(n.linked),
+                "vnic_profile": profile_name,
+            })
+        return nics
+
     @require_connection
     def get_template(self, name_or_id: str) -> Optional[Dict]:
         """获取模板详情
@@ -38,38 +119,8 @@ class TemplateExtendedMCP(BaseMCP):
         if not template:
             return None
 
-        # 获取磁盘信息
-        disks = []
-        try:
-            disk_attachments = template.disk_attachments_service().list()
-            for da in disk_attachments:
-                disk = da.disk_service().get()
-                disks.append({
-                    "id": disk.id,
-                    "name": disk.name,
-                    "size_gb": int((disk.provisioned_size or 0) / (1024**3)),
-                    "format": str(disk.format.value) if disk.format else "cow",
-                    "interface": str(da.interface.value) if da.interface else "virtio",
-                })
-        except Exception as e:
-            logger.debug(f"获取模板磁盘信息失败: {e}")
-
-        # 获取网卡信息
-        nics = []
-        try:
-            nics_service = template.nics_service()
-            nic_list = nics_service.list()
-            nics = [
-                {
-                    "id": n.id,
-                    "name": n.name,
-                    "mac": n.mac.address if n.mac else "",
-                    "interface": str(n.interface.value) if n.interface else "virtio",
-                }
-                for n in nic_list
-            ]
-        except Exception as e:
-            logger.debug(f"获取模板网卡信息失败: {e}")
+        disks = self._template_disks(template.id)
+        nics = self._template_nics(template.id)
 
         return {
             "id": template.id,
@@ -80,7 +131,7 @@ class TemplateExtendedMCP(BaseMCP):
             "cpu_sockets": template.cpu.topology.sockets if template.cpu and template.cpu.topology else 1,
             "cpu_threads": template.cpu.topology.threads if template.cpu and template.cpu.topology else 1,
             "os_type": template.os.type if template.os else "",
-            "cluster": template.cluster.name if template.cluster else "",
+            "cluster": self._cluster_name(template.cluster),
             "cluster_id": template.cluster.id if template.cluster else "",
             "status": str(template.status.value) if template.status else "ok",
             "disks": disks,
@@ -215,25 +266,7 @@ class TemplateExtendedMCP(BaseMCP):
         if not template:
             raise ValueError(f"模板不存在: {name_or_id}")
 
-        disks = []
-        try:
-            disk_attachments = template.disk_attachments_service().list()
-            for da in disk_attachments:
-                disk = da.disk_service().get()
-                disks.append({
-                    "id": disk.id,
-                    "name": disk.name,
-                    "size_gb": int((disk.provisioned_size or 0) / (1024**3)),
-                    "actual_size_gb": int((disk.actual_size or 0) / (1024**3)),
-                    "format": str(disk.format.value) if disk.format else "cow",
-                    "storage_domain": disk.storage_domain.name if disk.storage_domain else "",
-                    "interface": str(da.interface.value) if da.interface else "virtio",
-                    "bootable": da.bootable if hasattr(da, 'bootable') else False,
-                })
-        except Exception as e:
-            logger.error(f"获取模板磁盘失败: {e}")
-
-        return disks
+        return self._template_disks(template.id)
 
     @require_connection
     def list_template_nics(self, name_or_id: str) -> List[Dict]:
@@ -249,25 +282,7 @@ class TemplateExtendedMCP(BaseMCP):
         if not template:
             raise ValueError(f"模板不存在: {name_or_id}")
 
-        nics = []
-        try:
-            nics_service = template.nics_service()
-            nic_list = nics_service.list()
-            nics = [
-                {
-                    "id": n.id,
-                    "name": n.name,
-                    "mac": n.mac.address if n.mac else "",
-                    "interface": str(n.interface.value) if n.interface else "virtio",
-                    "linked": n.linked if hasattr(n, 'linked') else True,
-                    "vnic_profile": n.vnic_profile.name if n.vnic_profile else "",
-                }
-                for n in nic_list
-            ]
-        except Exception as e:
-            logger.error(f"获取模板网卡失败: {e}")
-
-        return nics
+        return self._template_nics(template.id)
 
     # ── Instance Type 管理 ──────────────────────────────────────────────────
 

@@ -1,6 +1,6 @@
 # oVirt MCP Server
 
-A [Model Context Protocol](https://modelcontextprotocol.io/) (MCP) server for [oVirt](https://www.ovirt.org/) / RHV virtualization management. Provides 180+ tools (182 registered) for managing VMs, hosts, clusters, networks, storage, templates, snapshots, disks, events, affinity groups, RBAC, quotas, checkpoints, migrations, VM pools, and more — enabling AI assistants like Claude to interact with your virtualization infrastructure.
+A [Model Context Protocol](https://modelcontextprotocol.io/) (MCP) server for [oVirt](https://www.ovirt.org/) / RHV virtualization management. Provides 180+ tools (187 registered) for managing VMs, hosts, clusters, networks, storage, templates, snapshots, disks, events, affinity groups, RBAC, quotas, checkpoints, migrations, VM pools, and more — enabling AI assistants like Claude to interact with your virtualization infrastructure.
 
 ## Features
 
@@ -125,10 +125,6 @@ docker run -i --rm \
 
 ## Available Tools
 
-> `cluster_hosts`, `cluster_vms`, `cluster_cpu_load` and
-> `template_vm_create` are registered but their backing methods are missing
-> — calling them returns a "Method not found" error (known issue).
-
 ### Virtual Machines (Core)
 
 | Tool | Description |
@@ -141,6 +137,7 @@ docker run -i --rm \
 | `vm_restart` | Restart a VM |
 | `vm_delete` | Delete a VM |
 | `vm_update_resources` | Update VM CPU/memory |
+| `vm_rename` | Rename a VM |
 | `vm_stats` | Get VM statistics |
 
 ### VM Extended Operations
@@ -157,6 +154,7 @@ docker run -i --rm \
 | `vm_numa_list` | List VM NUMA nodes |
 | `vm_watchdog_list` | List VM watchdog devices |
 | `vm_watchdog_update` | Update VM watchdog config |
+| `vm_mediated_device_list` | List mediated (vGPU) devices |
 | `vm_pin_to_host` | Pin VM to specific host |
 | `vm_session_list` | List active VM sessions |
 
@@ -238,8 +236,9 @@ docker run -i --rm \
 | Tool | Description |
 |------|-------------|
 | `network_filter_list` | List network filters |
+| `filter_list` | List permission filters — **unsupported by oVirt 4.5 REST, returns an explicit error** |
 | `mac_pool_list` | List MAC address pools |
-| `qos_list` | List QoS configurations |
+| `qos_list` | List QoS configurations (data-center-scoped) |
 
 ### Hosts (Core)
 
@@ -326,7 +325,7 @@ docker run -i --rm \
 | `storage_export_vms` | List VMs on export domain |
 | `storage_import_vm` | Import VM from export domain |
 | `disk_snapshot_list` | List disk snapshots |
-| `iscsi_bond_list` | List iSCSI bonds |
+| `iscsi_bond_list` | List iSCSI bonds (data-center-scoped) |
 
 ### Templates (Core)
 
@@ -389,7 +388,7 @@ docker run -i --rm \
 | `event_summary` | Get events summary |
 | `event_acknowledge` | Acknowledge event |
 | `event_clear_alerts` | Clear all alert events |
-| `event_subscription_list` | List event subscriptions |
+| `event_subscription_list` | List event subscriptions — **unsupported by oVirt 4.5 REST, returns an explicit error** |
 | `bookmark_list` | List bookmarks |
 
 ### RBAC - Users
@@ -401,7 +400,7 @@ docker run -i --rm \
 | `user_create` | Create user |
 | `user_update` | Update user |
 | `user_delete` | Delete user |
-| `user_group_list` | List user's groups |
+| `user_groups` | List user's groups |
 
 ### RBAC - Groups
 
@@ -507,7 +506,7 @@ docker run -i --rm \
 # Install dev dependencies
 pip install -e ".[dev]"
 
-# Run tests (220 unit tests; no real oVirt needed)
+# Run tests (270 unit tests; no real oVirt needed)
 pytest tests/ -m "not integration" -v
 
 # Lint (the package lives in the repo root — there is no src/ directory)

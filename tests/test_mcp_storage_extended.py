@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 """Tests for StorageExtendedMCP class - 存储扩展模块测试."""
+from types import SimpleNamespace
+
 import pytest
 from unittest.mock import MagicMock
 
@@ -364,3 +366,154 @@ class TestStorageExtendedMCPTools:
             assert tool in MCP_TOOLS, f"Missing tool: {tool}"
             assert "method" in MCP_TOOLS[tool]
             assert "description" in MCP_TOOLS[tool]
+
+
+class TestIscsiBondsDataCenterScoped:
+    """iSCSI bonds live under the data center, not on SystemService."""
+
+    @staticmethod
+    def _mcp():
+        from ovirt_engine_mcp_server.mcp_storage_extended import StorageExtendedMCP
+
+        mock_ovirt = MagicMock()
+        mock_ovirt.connected = True
+        dcs_service = (
+            mock_ovirt.connection.system_service.return_value
+            .data_centers_service.return_value
+        )
+        dcs_service.list.return_value = [SimpleNamespace(id="dc-77", name="Default")]
+        # the same accessor resolves the bond's data-center reference
+        dcs_service.data_center_service.return_value.get.return_value = SimpleNamespace(
+            id="dc-77", name="Default"
+        )
+        dcs_service.data_center_service.return_value.iscsi_bonds_service.return_value.list.return_value = [
+            SimpleNamespace(
+                id="bond-1",
+                name="bond-a",
+                description="bond desc",
+                data_center=SimpleNamespace(id="dc-77", name=None),
+            )
+        ]
+        return mock_ovirt, StorageExtendedMCP(mock_ovirt)
+
+    def test_list_iscsi_bonds_reads_data_center_service(self):
+        mock_ovirt, mcp = self._mcp()
+
+        result = mcp.list_iscsi_bonds()
+
+        assert result == [{
+            "id": "bond-1",
+            "name": "bond-a",
+            "description": "bond desc",
+            "data_center": "Default",
+        }]
+        # the system-level call that used to crash must not be attempted
+        mock_ovirt.connection.system_service.return_value.iscsi_bonds_service.assert_not_called()
+
+
+class TestStorageConnectionsScoping:
+    """``storage_connections_list`` optionally scopes to one storage domain."""
+
+    @staticmethod
+    def _connection():
+        return SimpleNamespace(
+            id="conn-1",
+            address="10.10.10.10",
+            type=SimpleNamespace(value="nfs"),
+            path="/export/data",
+            port=2049,
+            mount_options="soft",
+            nfs_version=SimpleNamespace(value="4.1"),
+        )
+
+    @staticmethod
+    def _connection_without_port():
+        return SimpleNamespace(
+            id="conn-2",
+            address="ovih03.dcz",
+            type=SimpleNamespace(value="glusterfs"),
+            path="/hosted-engine",
+            port=None,
+            mount_options=None,
+            nfs_version=None,
+        )
+
+    def test_none_values_are_not_leaked(self):
+        from ovirt_engine_mcp_server.mcp_storage_extended import StorageExtendedMCP
+
+        mock_ovirt = MagicMock()
+        mock_ovirt.connected = True
+        conns = (
+            mock_ovirt.connection.system_service.return_value
+            .storage_connections_service.return_value
+        )
+        conns.list.return_value = [self._connection_without_port()]
+
+        result = StorageExtendedMCP(mock_ovirt).list_storage_connections()
+
+        assert result[0]["port"] == ""
+        assert result[0]["mount_options"] == ""
+        assert result[0]["path"] == "/hosted-engine"
+        assert "None" not in str(result)
+
+    def test_list_all_connections_uses_system_collection(self):
+        from ovirt_engine_mcp_server.mcp_storage_extended import StorageExtendedMCP
+
+        mock_ovirt = MagicMock()
+        mock_ovirt.connected = True
+        conns = (
+            mock_ovirt.connection.system_service.return_value
+            .storage_connections_service.return_value
+        )
+        conns.list.return_value = [self._connection()]
+
+        result = StorageExtendedMCP(mock_ovirt).list_storage_connections()
+
+        assert result[0]["type"] == "nfs"
+        assert result[0]["nfs_version"] == "4.1"
+        assert result[0]["mount_options"] == "soft"
+
+    def test_storage_domain_scope_uses_domain_service(self):
+        from ovirt_engine_mcp_server.mcp_storage_extended import StorageExtendedMCP
+
+        mock_ovirt = MagicMock()
+        mock_ovirt.connected = True
+        sds = (
+            mock_ovirt.connection.system_service.return_value
+            .storage_domains_service.return_value
+        )
+        # `_find_resource` probes the item service first and gets the domain
+        sds.storage_domain_service.return_value.get.return_value = SimpleNamespace(
+            id="sd-9", name="hosted_storage"
+        )
+        sd_service = sds.storage_domain_service.return_value
+        sd_service.storage_connections_service.return_value.list.return_value = [
+            self._connection()
+        ]
+
+        result = StorageExtendedMCP(mock_ovirt).list_storage_connections("hosted_storage")
+
+        called_with = [c.args for c in sds.storage_domain_service.call_args_list]
+        assert ("sd-9",) in called_with  # resolved domain id, not the raw string
+        sd_service.storage_connections_service.assert_called_once_with()
+        # the unscoped system collection must not be used in scoped mode
+        (
+            mock_ovirt.connection.system_service.return_value
+            .storage_connections_service.return_value.list
+        ).assert_not_called()
+        assert result[0]["id"] == "conn-1"
+
+    def test_unknown_storage_domain_raises(self):
+        from ovirt_engine_mcp_server.mcp_storage_extended import StorageExtendedMCP
+
+        mock_ovirt = MagicMock()
+        mock_ovirt.connected = True
+        sds = (
+            mock_ovirt.connection.system_service.return_value
+            .storage_domains_service.return_value
+        )
+        sds.storage_domain_service.return_value.get.side_effect = Exception("404")
+        sds.list.return_value = []
+
+        with pytest.raises(ValueError, match="存储域不存在"):
+            StorageExtendedMCP(mock_ovirt).list_storage_connections("no-such-sd")

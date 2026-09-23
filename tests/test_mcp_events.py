@@ -412,3 +412,21 @@ class TestEventsMCPTools:
             assert tool in MCP_TOOLS, f"Missing tool: {tool}"
             assert "method" in MCP_TOOLS[tool]
             assert "description" in MCP_TOOLS[tool]
+
+
+class TestEventsMCPUnsupportedCollections:
+    """oVirt 4.5 REST exposes no event-subscription collection.
+
+    ``/api/eventsubscriptions`` and ``/api/events/{id}/subscriptions`` are 404,
+    so the tool must report "unsupported" instead of silently returning ``[]``.
+    """
+
+    @pytest.mark.parametrize("user", [None, "admin@internal"])
+    def test_list_event_subscriptions_reports_unsupported_api(self, user):
+        from ovirt_engine_mcp_server.mcp_events import EventsMCP
+
+        mock_ovirt = MagicMock()
+        mock_ovirt.connected = True
+
+        with pytest.raises(ValueError, match="事件订阅不可用"):
+            EventsMCP(mock_ovirt).list_event_subscriptions(user)

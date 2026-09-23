@@ -75,11 +75,11 @@ class EventsMCP(BaseMCP):
                 "description": event.description or "",
                 "severity": str(event.severity.value) if event.severity else "normal",
                 "time": str(event.time) if event.time else "",
-                "user": event.user.name if event.user else "",
-                "cluster": event.cluster.name if event.cluster else "",
-                "host": event.host.name if event.host else "",
-                "vm": event.vm.name if event.vm else "",
-                "data_center": event.data_center.name if event.data_center else "",
+                "user": self._user_name(event.user),
+                "cluster": self._cluster_name(event.cluster),
+                "host": self._host_name(event.host),
+                "vm": self._vm_name(event.vm),
+                "data_center": self._data_center_name(event.data_center),
                 "origin": event.origin if hasattr(event, 'origin') else "",
                 "custom_id": event.custom_id if hasattr(event, 'custom_id') else "",
             })
@@ -111,18 +111,18 @@ class EventsMCP(BaseMCP):
                 "description": event.description or "",
                 "severity": str(event.severity.value) if event.severity else "normal",
                 "time": str(event.time) if event.time else "",
-                "user": event.user.name if event.user else "",
+                "user": self._user_name(event.user),
                 "user_id": event.user.id if event.user else "",
-                "cluster": event.cluster.name if event.cluster else "",
+                "cluster": self._cluster_name(event.cluster),
                 "cluster_id": event.cluster.id if event.cluster else "",
-                "host": event.host.name if event.host else "",
+                "host": self._host_name(event.host),
                 "host_id": event.host.id if event.host else "",
-                "vm": event.vm.name if event.vm else "",
+                "vm": self._vm_name(event.vm),
                 "vm_id": event.vm.id if event.vm else "",
-                "data_center": event.data_center.name if event.data_center else "",
+                "data_center": self._data_center_name(event.data_center),
                 "data_center_id": event.data_center.id if event.data_center else "",
-                "template": event.template.name if event.template else "",
-                "storage_domain": event.storage_domain.name if event.storage_domain else "",
+                "template": self._template_name(event.template),
+                "storage_domain": self._storage_domain_name(event.storage_domain),
                 "origin": event.origin if hasattr(event, 'origin') else "",
                 "custom_id": event.custom_id if hasattr(event, 'custom_id') else "",
                 "flood_rate": event.flood_rate if hasattr(event, 'flood_rate') else 0,
@@ -255,29 +255,14 @@ class EventsMCP(BaseMCP):
         Returns:
             事件订阅列表
         """
-        try:
-            subscriptions_service = self.connection.system_service().event_subscriptions_service()
-
-            search = None
-            if user:
-                search = f"user={_sanitize_search_value(user)}"
-
-            subscriptions = subscriptions_service.list(search=search)
-        except Exception as e:
-            logger.error(f"获取事件订阅失败: {e}")
-            return []
-
-        return [
-            {
-                "id": s.id,
-                "user": s.user.name if hasattr(s, 'user') and s.user else "",
-                "user_id": s.user.id if hasattr(s, 'user') and s.user else "",
-                "event_type": str(s.event.type.value) if hasattr(s, 'event') and s.event else "",
-                "method": str(s.method.value) if hasattr(s, 'method') and s.method else "",
-                "enabled": s.enabled if hasattr(s, 'enabled') else True,
-            }
-            for s in subscriptions
-        ]
+        # oVirt 4.5 REST has no event-subscription collection: SystemService
+        # exposes no `event_subscriptions_service`, and both
+        # `/api/eventsubscriptions` and `/api/events/{id}/subscriptions`
+        # return 404. Raise instead of silently reporting an empty list.
+        _ = user  # accepted for schema compatibility
+        raise ValueError(
+            "事件订阅不可用: 当前 oVirt API 未提供 event subscriptions 集合"
+        )
 
     # ── 书签管理 ────────────────────────────────────────────────────────────
 

@@ -18,6 +18,30 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 
+def _enum_value(value: Any, default: str = "") -> str:
+    """Stringify a field that may be an SDK enum **or** a plain string.
+
+    Live engines return some fields (e.g. ``Host.os.type`` == ``'RHEL'``) as
+    plain strings, so ``value.value`` cannot be assumed to exist.
+    """
+    if value is None:
+        return default
+    inner = getattr(value, "value", None)
+    return str(inner) if inner is not None else str(value)
+
+
+def _storage_bytes(storage: Any) -> int:
+    """Total size in bytes of a host storage entry.
+
+    ``HostStorage`` exposes no ``size``/``available`` attributes — capacity
+    lives on its logical units (LUNs).
+    """
+    total = 0
+    for lu in getattr(storage, "logical_units", None) or []:
+        total += getattr(lu, "size", None) or 0
+    return total
+
+
 class HostExtendedMCP(BaseMCP):
     """主机扩展管理 MCP"""
 
@@ -60,9 +84,9 @@ class HostExtendedMCP(BaseMCP):
             storage = [
                 {
                     "id": s.id,
-                    "name": s.name,
-                    "type": str(s.type.value) if s.type else "",
-                    "size_gb": int((s.size or 0) / (1024**3)),
+                    "name": s.name or "",
+                    "type": _enum_value(s.type),
+                    "size_gb": int(_storage_bytes(s) / (1024**3)),
                 }
                 for s in storage_list[:10]
             ]
@@ -73,8 +97,8 @@ class HostExtendedMCP(BaseMCP):
             "id": host.id,
             "name": host.name,
             "description": host.description or "",
-            "status": str(host.status.value) if host.status else "unknown",
-            "cluster": host.cluster.name if host.cluster else "",
+            "status": _enum_value(host.status, "unknown"),
+            "cluster": self._cluster_name(host.cluster),
             "cluster_id": host.cluster.id if host.cluster else "",
             "address": host.address,
             "port": host.port,
@@ -83,11 +107,13 @@ class HostExtendedMCP(BaseMCP):
             "cpu_threads": host.cpu.topology.threads if host.cpu and host.cpu.topology else 0,
             "cpu_speed_mhz": host.cpu.speed if host.cpu else 0,
             "memory_gb": int((host.memory or 0) / (1024**3)),
-            "os_type": str(host.os.type.value) if host.os else "",
-            "os_version": host.os.version.full_version if host.os and host.os.version else "",
-            "kvm_version": host.kvm.version if host.kvm else "",
-            "libvirt_version": host.libvirt_version.full_version if host.libvirt_version else "",
-            "vdsm_version": host.vdsm_version.full_version if host.vdsm_version else "",
+            # os.type is a plain str on live engines; kvm / vdsm_version are
+            # absent from the Host type altogether.
+            "os_type": _enum_value(host.os.type) if host.os else "",
+            "os_version": getattr(getattr(getattr(host, "os", None), "version", None), "full_version", None) or "",
+            "kvm_version": getattr(getattr(host, "kvm", None), "version", None) or "",
+            "libvirt_version": getattr(getattr(host, "libvirt_version", None), "full_version", None) or "",
+            "vdsm_version": getattr(getattr(host, "vdsm_version", None), "full_version", None) or "",
             "nics": nics,
             "storage": storage,
         }
@@ -561,12 +587,12 @@ class HostExtendedMCP(BaseMCP):
         return [
             {
                 "id": s.id,
-                "name": s.name,
-                "type": str(s.type.value) if s.type else "",
-                "size_gb": int((s.size or 0) / (1024**3)),
-                "free_gb": int((s.available or 0) / (1024**3)),
-                "mount_point": s.mount_point if hasattr(s, 'mount_point') else "",
-                "path": s.path if hasattr(s, 'path') else "",
+                "name": s.name or "",
+                "type": _enum_value(s.type),
+                "size_gb": int(_storage_bytes(s) / (1024**3)),
+                "free_gb": int((getattr(s, "available", None) or 0) / (1024**3)),
+                "mount_point": getattr(s, "mount_point", "") or "",
+                "path": getattr(s, "path", "") or "",
             }
             for s in storage_list
         ]

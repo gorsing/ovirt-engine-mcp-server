@@ -4,6 +4,7 @@
 from typing import Any, Callable, Dict, Optional
 import logging
 
+from .links import LinkNameMixin
 from .search_utils import sanitize_search_value as _sanitize_search_value
 
 logger = logging.getLogger(__name__)
@@ -31,8 +32,9 @@ RESOURCE_SERVICE_GETTERS: Dict[str, Callable[[Any], Any]] = {
     # Note: affinity_group is under cluster, not system_service
     "mac_pool": lambda s: s.mac_pools_service(),
     "network_filter": lambda s: s.network_filters_service(),
-    "qos": lambda s: s.qoss_service(),
-    "iscsi_bond": lambda s: s.iscsi_bonds_service(),
+    # NB: QoS and iSCSI bonds are data-center-scoped (`data_center_service(…)
+    # .qoss_service()` / `.iscsi_bonds_service()`), not on SystemService — so
+    # there is no usable system-level getter for them here.
     "storage_connection": lambda s: s.storage_connections_service(),
 }
 
@@ -46,8 +48,11 @@ RESOURCE_SERVICE_NAMES: Dict[str, str] = {
     "network": "network_service",
     "template": "template_service",
     "disk": "disk_service",
-    "vnic_profile": "vnic_profile_service",
-    "vm_pool": "vm_pool_service",
+    # NB: VnicProfilesService exposes ``profile_service``, not
+    # ``vnic_profile_service`` — a wrong name here made id lookups always
+    # fall through to the (failing) name search.
+    "vnic_profile": "profile_service",
+    "vm_pool": "pool_service",
     "user": "user_service",
     "role": "role_service",
     "permission": "permission_service",
@@ -57,13 +62,11 @@ RESOURCE_SERVICE_NAMES: Dict[str, str] = {
     # Note: affinity_group is under cluster, not system_service
     "mac_pool": "mac_pool_service",
     "network_filter": "network_filter_service",
-    "qos": "qos_service",
-    "iscsi_bond": "iscsi_bond_service",
     "storage_connection": "storage_connection_service",
 }
 
 
-class BaseMCP:
+class BaseMCP(LinkNameMixin):
     """Base class for MCP extension modules.
 
     Provides common utilities for resource lookup and connection management.

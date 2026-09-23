@@ -88,6 +88,10 @@ TOOL_VALIDATORS = {
         if v
         else v,
     },
+    "vm_rename": {
+        "name_or_id": lambda v: validate_name_or_id(v),
+        "new_name": lambda v: validate_name(v, "新名称"),
+    },
     "snapshot_create": {
         "name_or_id": lambda v: validate_name_or_id(v),
         "description": lambda v: str(v)[:500] if v else v,

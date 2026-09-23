@@ -472,11 +472,11 @@ class RbacMCP(BaseMCP):
         for perm in permissions:
             result.append({
                 "id": perm.id,
-                "role": perm.role.name if perm.role else "",
+                "role": self._role_name(perm.role),
                 "role_id": perm.role.id if perm.role else "",
-                "user": perm.user.name if perm.user else "",
+                "user": self._user_name(perm.user),
                 "user_id": perm.user.id if perm.user else "",
-                "group": perm.group.name if perm.group else "",
+                "group": self._group_name(perm.group),
                 "group_id": perm.group.id if perm.group else "",
             })
 
@@ -975,22 +975,13 @@ class RbacMCP(BaseMCP):
         Returns:
             过滤器列表
         """
-        filters_service = self.connection.system_service().filters_service()
-
-        try:
-            filters = filters_service.list()
-        except Exception as e:
-            logger.error(f"获取过滤器列表失败: {e}")
-            return []
-
-        return [
-            {
-                "id": f.id,
-                "name": f.name if hasattr(f, 'name') else "",
-                "permission": f.permission.name if hasattr(f, 'permission') and f.permission else "",
-            }
-            for f in filters
-        ]
+        # oVirt 4.5 REST exposes no permission-filter collection (the API root
+        # lists no `filters`, and `/api/filters`, `/api/permissionfilters`
+        # are 404), so SystemService has no `filters_service`. Fail loudly
+        # instead of crashing with AttributeError or reporting an empty list.
+        raise ValueError(
+            "权限过滤器不可用: 当前 oVirt API 未提供 permission filters 集合"
+        )
 
 
 # MCP 工具注册表

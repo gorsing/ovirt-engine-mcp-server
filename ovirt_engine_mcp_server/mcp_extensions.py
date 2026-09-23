@@ -45,7 +45,7 @@ class NetworkMCP(BaseMCP):
             "id": network.id,
             "name": network.name,
             "description": network.description or "",
-            "data_center": network.data_center.name if network.data_center else "",
+            "data_center": self._data_center_name(network.data_center),
             "data_center_id": network.data_center.id if network.data_center else "",
             "vlan_id": network.vlan.id if network.vlan else None,
             "mtu": network.mtu if hasattr(network, 'mtu') else 0,
@@ -67,7 +67,7 @@ class NetworkMCP(BaseMCP):
                 "id": n.id,
                 "name": n.name,
                 "mac": n.mac.address if n.mac else "",
-                "network": n.network.name if n.network else "",
+                "network": self._network_name(n.network),
                 "interface": str(n.interface.value) if n.interface else "virtio",
                 "linked": n.linked
             }
@@ -202,9 +202,16 @@ class NetworkMCP(BaseMCP):
                 "id": p.id,
                 "name": p.name,
                 "description": p.description or "",
-                "network": p.network.name if p.network else "",
+                "network": self._network_name(p.network),
                 "network_id": p.network.id if p.network else "",
-                "pass_through": str(p.pass_through.value) if hasattr(p, 'pass_through') and p.pass_through else "disabled",
+                # pass_through is a VnicPassThrough object exposing `.mode`,
+                # not a bare enum with `.value`.
+                "pass_through": (
+                    str(p.pass_through.mode.value)
+                    if getattr(p, "pass_through", None) is not None
+                    and getattr(p.pass_through, "mode", None) is not None
+                    else "disabled"
+                ),
                 "port_mirroring": p.port_mirroring if hasattr(p, 'port_mirroring') else False,
             }
             for p in profiles
@@ -223,7 +230,7 @@ class NetworkMCP(BaseMCP):
         profiles_service = self.connection.system_service().vnic_profiles_service()
 
         try:
-            profile = profiles_service.vnic_profile_service(name_or_id).get()
+            profile = profiles_service.profile_service(name_or_id).get()
             if profile:
                 return self._format_vnic_profile(profile)
         except Exception:
@@ -241,9 +248,14 @@ class NetworkMCP(BaseMCP):
             "id": profile.id,
             "name": profile.name,
             "description": profile.description or "",
-            "network": profile.network.name if profile.network else "",
+            "network": self._network_name(profile.network),
             "network_id": profile.network.id if profile.network else "",
-            "pass_through": str(profile.pass_through.value) if hasattr(profile, 'pass_through') and profile.pass_through else "disabled",
+            "pass_through": (
+                str(profile.pass_through.mode.value)
+                if getattr(profile, "pass_through", None) is not None
+                and getattr(profile.pass_through, "mode", None) is not None
+                else "disabled"
+            ),
             "port_mirroring": profile.port_mirroring if hasattr(profile, 'port_mirroring') else False,
             "custom_properties": [
                 {"name": cp.name, "value": cp.value}
@@ -310,7 +322,7 @@ class NetworkMCP(BaseMCP):
         # 查找 profile
         profile_id = None
         try:
-            profile_service = profiles_service.vnic_profile_service(name_or_id)
+            profile_service = profiles_service.profile_service(name_or_id)
             profile = profile_service.get()
             profile_id = name_or_id
         except Exception:
@@ -319,7 +331,7 @@ class NetworkMCP(BaseMCP):
                 raise ValueError(f"VNIC Profile 不存在: {name_or_id}")
             profile_id = profiles[0].id
             profile = profiles[0]
-            profile_service = profiles_service.vnic_profile_service(profile_id)
+            profile_service = profiles_service.profile_service(profile_id)
 
         if new_name:
             profile.name = new_name
@@ -346,7 +358,7 @@ class NetworkMCP(BaseMCP):
         # 查找 profile
         profile_id = None
         try:
-            profile_service = profiles_service.vnic_profile_service(name_or_id)
+            profile_service = profiles_service.profile_service(name_or_id)
             profile_service.get()
             profile_id = name_or_id
         except Exception:
@@ -355,7 +367,7 @@ class NetworkMCP(BaseMCP):
                 raise ValueError(f"VNIC Profile 不存在: {name_or_id}")
             profile_id = profiles[0].id
 
-        profiles_service.vnic_profile_service(profile_id).remove()
+        profiles_service.profile_service(profile_id).remove()
         return {"success": True, "message": f"VNIC Profile 已删除"}
 
     # ── Network Filter 管理 ────────────────────────────────────────────────
@@ -375,14 +387,23 @@ class NetworkMCP(BaseMCP):
             logger.error(f"获取网络过滤器列表失败: {e}")
             return []
 
-        return [
-            {
+        result = []
+        for f in filters:
+            # ``f.version`` is a Version struct — putting it straight into the
+            # result leaked "<ovirtsdk4.types.Version object at 0x…>" into output
+            ver = getattr(f, "version", None)
+            if ver is None:
+                version = ""
+            elif getattr(ver, "full_version", None):
+                version = ver.full_version
+            else:
+                version = f"{ver.major}.{ver.minor}"
+            result.append({
                 "id": f.id,
                 "name": f.name,
-                "version": f.version if hasattr(f, 'version') else "",
-            }
-            for f in filters
-        ]
+                "version": version,
+            })
+        return result
 
     # ── MAC Pool 管理 ──────────────────────────────────────────────────────
 
@@ -427,30 +448,36 @@ class NetworkMCP(BaseMCP):
         Returns:
             QoS 列表
         """
-        qos_service = self.connection.system_service().qoss_service()
-
-        try:
-            qoss = qos_service.list()
-        except Exception as e:
-            logger.error(f"获取 QoS 列表失败: {e}")
-            return []
+        # QoS is data-center-scoped in oVirt — ``SystemService`` has no
+        # ``qoss_service``, so the old system-level lookup crashed with
+        # AttributeError.
+        dcs_service = self.connection.system_service().data_centers_service()
+        if datacenter:
+            dcs = dcs_service.list(search=f"name={_sanitize_search_value(datacenter)}")
+            if not dcs:
+                raise ValueError(f"数据中心不存在: {datacenter}")
+        else:
+            dcs = dcs_service.list()
 
         result = []
-        for qos in qoss:
-            # 过滤数据中心
-            if datacenter and qos.data_center:
-                if qos.data_center.name != datacenter:
-                    continue
+        for dc in dcs:
+            try:
+                qoss = dcs_service.data_center_service(dc.id).qoss_service().list()
+            except Exception as e:
+                logger.error(f"获取 QoS 列表失败: {e}")
+                continue
 
-            result.append({
-                "id": qos.id,
-                "name": qos.name,
-                "description": qos.description or "",
-                "datacenter": qos.data_center.name if qos.data_center else "",
-                "type": str(qos.type_.value) if hasattr(qos, 'type_') and qos.type_ else "",
-                "max_inbound": qos.max_inbound if hasattr(qos, 'max_inbound') else 0,
-                "max_outbound": qos.max_outbound if hasattr(qos, 'max_outbound') else 0,
-            })
+            # when a datacenter was requested we already iterated only that DC
+            for qos in qoss:
+                result.append({
+                    "id": qos.id,
+                    "name": qos.name,
+                    "description": qos.description or "",
+                    "datacenter": self._data_center_name(qos.data_center) or dc.name,
+                    "type": str(qos.type_.value) if hasattr(qos, 'type_') and qos.type_ else "",
+                    "max_inbound": qos.max_inbound if hasattr(qos, 'max_inbound') else 0,
+                    "max_outbound": qos.max_outbound if hasattr(qos, 'max_outbound') else 0,
+                })
 
         return result
 
@@ -477,20 +504,22 @@ class ClusterMCP(BaseMCP):
         cpu_info = {}
         if c.cpu:
             cpu_info = {
-                "architecture": str(c.cpu.architecture.value) if c.cpu.architecture else "x86_64",
-                "型号": str(c.cpu.id) if getattr(c.cpu, "id", None) else ""
+                "architecture": str(c.cpu.architecture.value)
+                if getattr(c.cpu, "architecture", None) else "x86_64",
+                "model": str(c.cpu.name) if getattr(c.cpu, "name", None) else "",
             }
 
         return {
             "id": c.id,
             "name": c.name,
             "description": c.description or "",
-            "cpu_architecture": str(c.cpu.architecture.value) if c.cpu else "x86_64",
+            "cpu_architecture": str(c.cpu.architecture.value)
+            if c.cpu and getattr(c.cpu, "architecture", None) else "x86_64",
             "cpu": cpu_info,
             "memory_gb": int((getattr(c, "memory", None) or 0) / (1024**3)),
             "version": f"{c.version.major}.{c.version.minor}" if c.version else "4.7",
             "status": str(c.status.value) if getattr(c, "status", None) else "up",
-            "data_center": c.data_center.name if c.data_center else "",
+            "data_center": self._data_center_name(c.data_center),
             "data_center_id": c.data_center.id if c.data_center else "",
             "gluster_service": c.gluster_service if hasattr(c, 'gluster_service') else False,
             "virt_service": c.virt_service if hasattr(c, 'virt_service') else True,
@@ -751,13 +780,23 @@ class TemplateMCP(BaseMCP):
         t = templates[0]
 
         # 获取磁盘信息
+        # Template objects expose no *_service() methods — go through the
+        # service, otherwise the AttributeError was swallowed and disks
+        # always came back empty.
         disks = []
         try:
-            disk_attachments = t.disk_attachments_service().list()
+            templates_service = self.connection.system_service().templates_service()
+            disk_attachments = (
+                templates_service.template_service(t.id)
+                .disk_attachments_service()
+                .list()
+            )
             for da in disk_attachments:
-                disk = da.disk_service().get()
+                disk = self.connection.system_service().disks_service().disk_service(
+                    da.disk.id
+                ).get()
                 disks.append({
-                    "name": disk.name,
+                    "name": disk.alias or disk.id,
                     "size_gb": int((disk.provisioned_size or 0) / (1024**3))
                 })
         except Exception as e:
@@ -803,6 +842,7 @@ MCP_TOOLS = {
     "vm_stop": {"method": "stop_vm", "description": "关闭虚拟机"},
     "vm_restart": {"method": "restart_vm", "description": "重启虚拟机"},
     "vm_update_resources": {"method": "update_vm_resources", "description": "更新 VM 资源"},
+    "vm_rename": {"method": "rename_vm", "description": "重命名虚拟机"},
     "vm_stats": {"method": "get_vm_stats", "description": "获取 VM 统计"},
 
     # 快照管理

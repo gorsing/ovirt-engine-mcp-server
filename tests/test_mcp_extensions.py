@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 """Tests for MCP extensions - 网络和集群扩展模块测试."""
+from types import SimpleNamespace
+
 import pytest
 from unittest.mock import MagicMock
 
@@ -424,3 +426,215 @@ class TestMCPExtensionsTools:
             assert tool in MCP_TOOLS, f"Missing tool: {tool}"
             assert "method" in MCP_TOOLS[tool]
             assert "description" in MCP_TOOLS[tool]
+
+
+class TestVnicProfileLiveAttributes:
+    """``VnicPassThrough`` exposes ``.mode``, not a bare ``.value``."""
+
+    @staticmethod
+    def _profile(pass_through):
+        return SimpleNamespace(
+            id="vnic-1",
+            name="ovirtmgmt",
+            description=None,
+            network=SimpleNamespace(name="ovirtmgmt", id="net-1"),
+            pass_through=pass_through,
+            port_mirroring=[],
+            custom_properties=[],
+        )
+
+    @staticmethod
+    def _mock_ovirt(profile):
+        mock_ovirt = MagicMock()
+        mock_ovirt.connected = True
+        profiles_service = mock_ovirt.connection.system_service.return_value.vnic_profiles_service.return_value
+        profiles_service.list.return_value = [profile]
+        return mock_ovirt
+
+    def test_list_vnic_profiles_uses_pass_through_mode(self):
+        from ovirt_engine_mcp_server.mcp_extensions import NetworkMCP
+
+        profile = self._profile(SimpleNamespace(mode=SimpleNamespace(value="disabled")))
+        mock_ovirt = self._mock_ovirt(profile)
+
+        result = NetworkMCP(mock_ovirt).list_vnic_profiles()
+
+        assert result[0]["pass_through"] == "disabled"
+
+    def test_list_vnic_profiles_handles_absent_pass_through(self):
+        from ovirt_engine_mcp_server.mcp_extensions import NetworkMCP
+
+        mock_ovirt = self._mock_ovirt(self._profile(None))
+
+        result = NetworkMCP(mock_ovirt).list_vnic_profiles()
+
+        assert result[0]["pass_through"] == "disabled"
+
+    def test_get_vnic_profile_uses_pass_through_mode(self):
+        from ovirt_engine_mcp_server.mcp_extensions import NetworkMCP
+
+        profile = self._profile(SimpleNamespace(mode=SimpleNamespace(value="enabled")))
+        mock_ovirt = MagicMock()
+        mock_ovirt.connected = True
+        profiles_service = mock_ovirt.connection.system_service.return_value.vnic_profiles_service.return_value
+        profiles_service.profile_service.return_value.get.side_effect = Exception("404")
+        profiles_service.list.return_value = [profile]
+
+        result = NetworkMCP(mock_ovirt).get_vnic_profile("ovirtmgmt")
+
+        assert result is not None
+        assert result["pass_through"] == "enabled"
+
+
+class TestClusterCpuFormatting:
+    """Cluster CPU output must use ASCII keys and tolerate a missing arch."""
+
+    @staticmethod
+    def _cluster(architecture=..., cpu_name=None):
+        cluster = _create_mock_cluster()
+        if architecture is not ...:
+            cluster.cpu.architecture = architecture
+        cluster.cpu.name = cpu_name
+        return cluster
+
+    @staticmethod
+    def _mcp_for(cluster):
+        from ovirt_engine_mcp_server.mcp_extensions import ClusterMCP
+
+        mock_ovirt = MagicMock()
+        mock_ovirt.connected = True
+        clusters = mock_ovirt.connection.system_service.return_value.clusters_service.return_value
+        clusters.list.return_value = [cluster]
+        return ClusterMCP(mock_ovirt)
+
+    def test_get_cluster_uses_ascii_model_key(self):
+        cluster = self._cluster(cpu_name=None)
+
+        result = self._mcp_for(cluster).get_cluster("Default")
+
+        assert "型号" not in result["cpu"]
+        assert result["cpu"]["model"] == ""
+        assert result["cpu"]["architecture"] == "x86_64"
+
+    def test_get_cluster_handles_missing_architecture(self):
+        cluster = self._cluster(architecture=None)
+
+        result = self._mcp_for(cluster).get_cluster("Default")
+
+        assert result["cpu_architecture"] == "x86_64"
+        assert result["cpu"]["architecture"] == "x86_64"
+
+
+class TestDataCenterScopedQos:
+    """QoS is served by the data center; SystemService has no `qoss_service`."""
+
+    @staticmethod
+    def _qos():
+        return SimpleNamespace(
+            id="qos-1",
+            name="qos-high-throughput",
+            description="hb",
+            data_center=SimpleNamespace(id="dc-77", name="Default"),
+            type_=SimpleNamespace(value="host"),
+            max_inbound=12345,
+            max_outbound=54321,
+        )
+
+    @staticmethod
+    def _mcp(qos_list, dcs=...):
+        from ovirt_engine_mcp_server.mcp_extensions import NetworkMCP
+
+        mock_ovirt = MagicMock()
+        mock_ovirt.connected = True
+        dcs_service = (
+            mock_ovirt.connection.system_service.return_value
+            .data_centers_service.return_value
+        )
+        dcs_service.list.return_value = (
+            [SimpleNamespace(id="dc-77", name="Default")] if dcs is ... else dcs
+        )
+        dcs_service.data_center_service.return_value.qoss_service.return_value.list.return_value = qos_list
+        return mock_ovirt, NetworkMCP(mock_ovirt)
+
+    def test_qos_list_reads_data_center_service(self):
+        mock_ovirt, mcp = self._mcp([self._qos()])
+
+        result = mcp.list_qos()
+
+        assert len(result) == 1
+        assert result[0]["name"] == "qos-high-throughput"
+        assert result[0]["datacenter"] == "Default"
+        assert result[0]["type"] == "host"
+        assert result[0]["max_inbound"] == 12345
+        assert result[0]["max_outbound"] == 54321
+        # the system-level lookup that used to crash must not be attempted
+        mock_ovirt.connection.system_service.return_value.qoss_service.assert_not_called()
+
+    def test_qos_list_unknown_datacenter_raises(self):
+        with pytest.raises(ValueError, match="数据中心不存在"):
+            self._mcp([], dcs=[])[1].list_qos("no-such-dc")
+
+
+class TestNetworkFilterVersionFormatting:
+    """`Version` is a struct — raw objects leaked into tool output."""
+
+    @staticmethod
+    def _mcp(filters):
+        from ovirt_engine_mcp_server.mcp_extensions import NetworkMCP
+
+        mock_ovirt = MagicMock()
+        mock_ovirt.connected = True
+        filters_service = (
+            mock_ovirt.connection.system_service.return_value
+            .network_filters_service.return_value
+        )
+        filters_service.list.return_value = filters
+        return NetworkMCP(mock_ovirt)
+
+    def test_version_is_plain_text(self):
+        result = self._mcp([
+            SimpleNamespace(
+                id="f-1",
+                name="allow-arp",
+                version=SimpleNamespace(full_version="3.2", major=3, minor=2),
+            ),
+            SimpleNamespace(id="f-2", name="legacy", version=None),
+        ]).list_network_filters()
+
+        assert [row["version"] for row in result] == ["3.2", ""]
+        assert "object at 0x" not in str(result)
+
+    def test_missing_version_attribute(self):
+        result = self._mcp([SimpleNamespace(id="f-3", name="no-version")]).list_network_filters()
+
+        assert result[0]["version"] == ""
+
+
+class TestVnicProfileItemAccessor:
+    """`VnicProfilesService.profile_service` is the item accessor."""
+
+    @staticmethod
+    def _mcp(profile):
+        from ovirt_engine_mcp_server.mcp_extensions import NetworkMCP
+
+        mock_ovirt = MagicMock()
+        mock_ovirt.connected = True
+        profiles = (
+            mock_ovirt.connection.system_service.return_value
+            .vnic_profiles_service.return_value
+        )
+        profiles.profile_service.return_value.get.return_value = profile
+        return NetworkMCP(mock_ovirt), profiles
+
+    def test_update_uses_profile_service(self):
+        profile = SimpleNamespace(
+            id="vnic-1", name="ovirtmgmt", description=None, port_mirroring=False
+        )
+        mcp, profiles = self._mcp(profile)
+
+        mcp.update_vnic_profile("vnic-1", new_name="renamed-profile")
+
+        profiles.profile_service.assert_called_once_with("vnic-1")
+        profiles.profile_service.return_value.update.assert_called_once()
+        profiles.vnic_profile_service.assert_not_called()
+        assert profile.name == "renamed-profile"

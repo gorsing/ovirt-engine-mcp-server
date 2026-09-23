@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 """Tests for OvirtMCP class - 综合测试覆盖."""
+from types import SimpleNamespace
+
 import pytest
 from unittest.mock import MagicMock, patch, PropertyMock
 from datetime import datetime
@@ -795,3 +797,438 @@ class TestErrors:
         from ovirt_engine_mcp_server.errors import OvirtTimeoutError
         err = OvirtTimeoutError()
         assert err.retryable is True
+
+
+class TestDetailPayloads:
+    """Sub-collections and reference resolution for detail payloads."""
+
+    @patch("ovirt_engine_mcp_server.ovirt_mcp.Connection")
+    def test_get_vm_includes_disks_and_nics(self, mock_conn_class, mock_config):
+        """Sub-collections must be fetched through services, not the entity."""
+        from ovirt_engine_mcp_server.ovirt_mcp import OvirtMCP
+
+        mock_vm = _create_mock_vm()
+
+        attachment = MagicMock()
+        attachment.disk.id = "disk-1"
+        attachment.bootable = True
+        attachment.interface = MagicMock()
+        attachment.interface.value = "virtio"
+
+        disk = MagicMock()
+        disk.id = "disk-1"
+        disk.alias = "root"
+        disk.provisioned_size = 10737418240
+        disk.status.value = "ok"
+
+        nic = MagicMock()
+        nic.id = "nic-1"
+        nic.name = "nic1"
+        nic.mac.address = "56:6f:b4:e7:00:01"
+        nic.linked = True
+        nic.network = MagicMock()
+        nic.network.name = None  # live payload: id only
+        nic.network.id = "net-9"
+
+        network = MagicMock()
+        network.name = "ovirtmgmt"
+
+        mock_conn = MagicMock()
+        mock_conn.test.return_value = True
+
+        vms_service = mock_conn.system_service.return_value.vms_service.return_value
+        vms_service.list.return_value = [mock_vm]
+        vms_service.vm_service.return_value.get.return_value = mock_vm
+        vms_service.vm_service.return_value.disk_attachments_service.return_value.list.return_value = [attachment]
+        vms_service.vm_service.return_value.nics_service.return_value.list.return_value = [nic]
+
+        disks_service = mock_conn.system_service.return_value.disks_service.return_value
+        disks_service.disk_service.return_value.get.return_value = disk
+
+        networks_service = mock_conn.system_service.return_value.networks_service.return_value
+        networks_service.network_service.return_value.get.return_value = network
+
+        mock_conn_class.return_value = mock_conn
+
+        mcp = OvirtMCP(mock_config)
+        mcp.connect()
+        vm = mcp.get_vm("test-vm")
+
+        assert len(vm.disks) == 1
+        assert vm.disks[0]["name"] == "root"
+        assert vm.disks[0]["size_gb"] == 10
+        assert vm.disks[0]["bootable"] is True
+        assert vm.disks[0]["interface"] == "virtio"
+
+        assert len(vm.nics) == 1
+        assert vm.nics[0]["name"] == "nic1"
+        assert vm.nics[0]["network"] == "ovirtmgmt"  # resolved by id
+
+        disks_service.disk_service.assert_called_with("disk-1")
+
+    @patch("ovirt_engine_mcp_server.ovirt_mcp.Connection")
+    def test_host_usage_comes_from_statistics(self, mock_conn_class, mock_config):
+        """Host has no usage attributes — read the statistics instead."""
+        from ovirt_engine_mcp_server.ovirt_mcp import OvirtMCP
+
+        def stat(name, datum):
+            s = MagicMock()
+            s.name = name
+            value = MagicMock()
+            value.datum = datum
+            s.values = [value]
+            return s
+
+        host = MagicMock()
+        host.id = "host-1"
+        host.name = "ovih02.dcz"
+        host.status = MagicMock()
+        host.status.value = "up"
+        host.cluster = MagicMock()
+        host.cluster.name = "Default"
+        host.cpu = MagicMock()
+        host.cpu.topology.cores = 8
+        host.memory = 17179869184
+
+        mock_conn = MagicMock()
+        mock_conn.test.return_value = True
+
+        hosts_service = mock_conn.system_service.return_value.hosts_service.return_value
+        hosts_service.list.return_value = [host]
+        hosts_service.host_service.return_value.statistics_service.return_value.list.return_value = [
+            stat("cpu.current.idle", 97),
+            stat("cpu.current.user", 3),
+            stat("memory.used", 8 * 1024**3),
+            stat("memory.total", 16 * 1024**3),
+        ]
+        mock_conn_class.return_value = mock_conn
+
+        mcp = OvirtMCP(mock_config)
+        mcp.connect()
+        hosts = mcp.list_hosts()
+
+        assert hosts[0]["cpu_usage"] == 3.0  # 100 - idle
+        assert hosts[0]["memory_usage"] == 50.0
+
+    @patch("ovirt_engine_mcp_server.ovirt_mcp.Connection")
+    def test_get_vm_nic_resolves_network_through_profile(
+        self, mock_conn_class, mock_config
+    ):
+        """Live NIC payload: ``network`` is empty, only the profile is set."""
+        from ovirt_engine_mcp_server.ovirt_mcp import OvirtMCP
+
+        mock_vm = _create_mock_vm()
+        # SimpleNamespace => accessing a missing attribute raises, like the SDK
+        nic = SimpleNamespace(
+            id="nic-1",
+            name="nic1",
+            mac=SimpleNamespace(address="56:6f:b4:e7:00:01"),
+            linked=True,
+            network=None,
+            vnic_profile=SimpleNamespace(id="prof-9", name=None),
+        )
+        profile = SimpleNamespace(
+            id="prof-9",
+            name="ovirtmgmt",
+            network=SimpleNamespace(id="net-9", name=None),
+        )
+        network = SimpleNamespace(id="net-9", name="ovirtmgmt")
+
+        mock_conn = MagicMock()
+        mock_conn.test.return_value = True
+
+        vms_service = mock_conn.system_service.return_value.vms_service.return_value
+        vms_service.list.return_value = [mock_vm]
+        vms_service.vm_service.return_value.get.return_value = mock_vm
+        vms_service.vm_service.return_value.disk_attachments_service.return_value.list.return_value = []
+        vms_service.vm_service.return_value.nics_service.return_value.list.return_value = [nic]
+
+        profiles_service = (
+            mock_conn.system_service.return_value.vnic_profiles_service.return_value
+        )
+        profiles_service.profile_service.return_value.get.return_value = profile
+
+        networks_service = mock_conn.system_service.return_value.networks_service.return_value
+        networks_service.network_service.return_value.get.return_value = network
+
+        mock_conn_class.return_value = mock_conn
+
+        mcp = OvirtMCP(mock_config)
+        mcp.connect()
+        vm = mcp.get_vm("test-vm")
+
+        assert vm.nics[0]["vnic_profile"] == "ovirtmgmt"
+        assert vm.nics[0]["network"] == "ovirtmgmt"
+        profiles_service.profile_service.assert_called_once_with("prof-9")
+        networks_service.network_service.assert_called_once_with("net-9")
+
+    @patch("ovirt_engine_mcp_server.ovirt_mcp.Connection")
+    def test_link_name_resolves_by_kind_and_caches(self, mock_conn_class, mock_config):
+        from ovirt_engine_mcp_server.ovirt_mcp import OvirtMCP
+
+        ref = MagicMock()
+        ref.name = None
+        ref.id = "net-9"
+
+        resolved = MagicMock()
+        resolved.name = "ovirtmgmt"
+
+        mock_conn = MagicMock()
+        mock_conn.test.return_value = True
+        networks_service = mock_conn.system_service.return_value.networks_service.return_value
+        networks_service.network_service.return_value.get.return_value = resolved
+        mock_conn_class.return_value = mock_conn
+
+        mcp = OvirtMCP(mock_config)
+        mcp.connect()
+
+        assert mcp._network_name(ref) == "ovirtmgmt"
+        assert mcp._network_name(ref) == "ovirtmgmt"
+        networks_service.network_service.assert_called_once_with("net-9")
+        networks_service.network_service.return_value.get.assert_called_once()
+
+        # an empty ref never hits the API
+        assert mcp._network_name(None) == ""
+
+
+class TestRenameVM:
+    """Tests for OvirtMCP.rename_vm — backs the vm_rename tool."""
+
+    @patch("ovirt_engine_mcp_server.ovirt_mcp.Connection")
+    def test_rename_vm_success(self, mock_conn_class, mock_config):
+        from ovirt_engine_mcp_server.ovirt_mcp import OvirtMCP
+
+        mock_vm = _create_mock_vm()
+        mock_conn = MagicMock()
+        mock_conn.test.return_value = True
+
+        vms_service = MagicMock()
+        vms_service.vm_service.return_value.get.return_value = mock_vm
+        vms_service.list.return_value = []
+        mock_conn.system_service.return_value.vms_service.return_value = vms_service
+        mock_conn_class.return_value = mock_conn
+
+        mcp = OvirtMCP(mock_config)
+        mcp.connect()
+        result = mcp.rename_vm("test-vm", "renamed-vm")
+
+        assert result["success"] is True
+        assert result["vm_id"] == "vm-123"
+        assert result["old_name"] == "test-vm"
+        assert result["new_name"] == "renamed-vm"
+
+        update = vms_service.vm_service.return_value.update
+        assert update.call_count == 1
+        assert update.call_args[0][0].name == "renamed-vm"
+
+    @patch("ovirt_engine_mcp_server.ovirt_mcp.Connection")
+    def test_rename_vm_to_existing_name_rejected(self, mock_conn_class, mock_config):
+        from ovirt_engine_mcp_server.ovirt_mcp import OvirtMCP
+
+        mock_vm = _create_mock_vm()
+        other_vm = _create_mock_vm(vm_id="other-id", name="taken")
+
+        mock_conn = MagicMock()
+        mock_conn.test.return_value = True
+
+        vms_service = MagicMock()
+        vms_service.vm_service.return_value.get.return_value = mock_vm
+        vms_service.list.return_value = [other_vm]
+        mock_conn.system_service.return_value.vms_service.return_value = vms_service
+        mock_conn_class.return_value = mock_conn
+
+        mcp = OvirtMCP(mock_config)
+        mcp.connect()
+
+        with pytest.raises(ValueError):
+            mcp.rename_vm("test-vm", "taken")
+
+        vms_service.vm_service.return_value.update.assert_not_called()
+
+    @patch("ovirt_engine_mcp_server.ovirt_mcp.Connection")
+    def test_rename_vm_same_name_is_noop(self, mock_conn_class, mock_config):
+        from ovirt_engine_mcp_server.ovirt_mcp import OvirtMCP
+
+        mock_vm = _create_mock_vm()
+        mock_conn = MagicMock()
+        mock_conn.test.return_value = True
+
+        vms_service = MagicMock()
+        vms_service.vm_service.return_value.get.return_value = mock_vm
+        vms_service.list.return_value = []
+        mock_conn.system_service.return_value.vms_service.return_value = vms_service
+        mock_conn_class.return_value = mock_conn
+
+        mcp = OvirtMCP(mock_config)
+        mcp.connect()
+        result = mcp.rename_vm("test-vm", "test-vm")
+
+        assert result["success"] is True
+        assert "未变" in result["message"]
+        vms_service.vm_service.return_value.update.assert_not_called()
+
+    @patch("ovirt_engine_mcp_server.ovirt_mcp.Connection")
+    def test_rename_vm_rejects_blank_new_name(self, mock_conn_class, mock_config):
+        from ovirt_engine_mcp_server.ovirt_mcp import OvirtMCP
+
+        mock_conn = MagicMock()
+        mock_conn.test.return_value = True
+        mock_conn_class.return_value = mock_conn
+
+        mcp = OvirtMCP(mock_config)
+        mcp.connect()
+
+        with pytest.raises(ValueError):
+            mcp.rename_vm("test-vm", "   ")
+
+    @patch("ovirt_engine_mcp_server.ovirt_mcp.Connection")
+    def test_rename_vm_not_found(self, mock_conn_class, mock_config):
+        from ovirt_engine_mcp_server.ovirt_mcp import OvirtMCP
+        from ovirt_engine_mcp_server.errors import NotFoundError
+
+        mock_conn = MagicMock()
+        mock_conn.test.return_value = True
+
+        vms_service = MagicMock()
+        vms_service.vm_service.return_value.get.side_effect = Exception("404")
+        vms_service.list.return_value = []
+        mock_conn.system_service.return_value.vms_service.return_value = vms_service
+        mock_conn_class.return_value = mock_conn
+
+        mcp = OvirtMCP(mock_config)
+        mcp.connect()
+
+        with pytest.raises(NotFoundError):
+            mcp.rename_vm("no-such-vm", "whatever")
+
+
+class TestGetVMNotFound:
+    """get_vm on a missing VM must raise, not return a bogus success."""
+
+    @patch("ovirt_engine_mcp_server.ovirt_mcp.Connection")
+    def test_get_vm_missing_raises_not_found(self, mock_conn_class, mock_config):
+        from ovirt_engine_mcp_server.ovirt_mcp import OvirtMCP
+        from ovirt_engine_mcp_server.errors import NotFoundError
+
+        mock_conn = MagicMock()
+        mock_conn.test.return_value = True
+
+        vms_service = MagicMock()
+        vms_service.vm_service.return_value.get.side_effect = Exception("404")
+        vms_service.list.return_value = []
+        mock_conn.system_service.return_value.vms_service.return_value = vms_service
+        mock_conn_class.return_value = mock_conn
+
+        mcp = OvirtMCP(mock_config)
+        mcp.connect()
+
+        with pytest.raises(NotFoundError):
+            mcp.get_vm("no-such-vm")
+
+
+class TestReferenceNameResolution:
+    """List payloads carry cluster/host links with only an id populated."""
+
+    @staticmethod
+    def _setup(mock_conn, resolved_cluster_name, resolved_host_name):
+        """Wire a VM/host whose cluster/host link has name=None."""
+        mock_conn.test.return_value = True
+
+        resolved_cluster = MagicMock()
+        resolved_cluster.name = resolved_cluster_name
+        resolved_host = MagicMock()
+        resolved_host.name = resolved_host_name
+
+        system = mock_conn.system_service.return_value
+        system.clusters_service.return_value.cluster_service.return_value.get.return_value = (
+            resolved_cluster
+        )
+        system.hosts_service.return_value.host_service.return_value.get.return_value = (
+            resolved_host
+        )
+        return system
+
+    @patch("ovirt_engine_mcp_server.ovirt_mcp.Connection")
+    def test_map_vm_resolves_cluster_and_host_by_id(self, mock_conn_class, mock_config):
+        from ovirt_engine_mcp_server.ovirt_mcp import OvirtMCP
+
+        mock_vm = _create_mock_vm()
+        mock_vm.cluster = MagicMock()
+        mock_vm.cluster.name = None  # live list payload: id only
+        mock_vm.cluster.id = "cluster-77"
+        mock_vm.host = MagicMock()
+        mock_vm.host.name = None
+        mock_vm.host.id = "host-77"
+
+        mock_conn = MagicMock()
+        system = self._setup(mock_conn, "Default", "ovih02.dcz")
+        system.vms_service.return_value.list.return_value = [mock_vm]
+        mock_conn_class.return_value = mock_conn
+
+        mcp = OvirtMCP(mock_config)
+        mcp.connect()
+        vms = mcp.list_vms()
+
+        assert vms[0].cluster == "Default"
+        assert vms[0].host == "ovih02.dcz"
+        system.clusters_service.return_value.cluster_service.assert_called_with(
+            "cluster-77"
+        )
+
+    @patch("ovirt_engine_mcp_server.ovirt_mcp.Connection")
+    def test_map_vm_keeps_inline_names_without_extra_calls(
+        self, mock_conn_class, mock_config
+    ):
+        from ovirt_engine_mcp_server.ovirt_mcp import OvirtMCP
+
+        mock_vm = _create_mock_vm()  # cluster.name == "Default", host.name == "host1"
+
+        mock_conn = MagicMock()
+        system = self._setup(mock_conn, "SHOULD-NOT-BE-USED", "SHOULD-NOT-BE-USED")
+        system.vms_service.return_value.list.return_value = [mock_vm]
+        mock_conn_class.return_value = mock_conn
+
+        mcp = OvirtMCP(mock_config)
+        mcp.connect()
+        vms = mcp.list_vms()
+
+        assert vms[0].cluster == "Default"
+        assert vms[0].host == "host1"
+        system.clusters_service.return_value.cluster_service.assert_not_called()
+
+    @patch("ovirt_engine_mcp_server.ovirt_mcp.Connection")
+    def test_list_hosts_resolves_cluster_and_filters(self, mock_conn_class, mock_config):
+        from ovirt_engine_mcp_server.ovirt_mcp import OvirtMCP
+
+        host = MagicMock()
+        host.id = "host-77"
+        host.name = "ovih02.dcz"
+        host.status = MagicMock()
+        host.status.value = "up"
+        host.cluster = MagicMock()
+        host.cluster.name = None  # live list payload: id only
+        host.cluster.id = "cluster-77"
+        host.cpu = MagicMock()
+        host.cpu.topology.cores = 64
+        host.memory = 137438953472
+
+        mock_conn = MagicMock()
+        system = self._setup(mock_conn, "Default", "n/a")
+        system.hosts_service.return_value.list.return_value = [host]
+        mock_conn_class.return_value = mock_conn
+
+        mcp = OvirtMCP(mock_config)
+        mcp.connect()
+
+        hosts = mcp.list_hosts(cluster="Default")
+        assert len(hosts) == 1
+        assert hosts[0]["cluster"] == "Default"
+
+        # resolved once, then cached for the next call
+        system.clusters_service.return_value.cluster_service.assert_called_once_with(
+            "cluster-77"
+        )
+        assert mcp.list_hosts(cluster="OtherCluster") == []
+        system.clusters_service.return_value.cluster_service.assert_called_once_with(
+            "cluster-77"
+        )

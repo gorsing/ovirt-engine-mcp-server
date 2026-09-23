@@ -149,7 +149,7 @@ class VmExtendedMCP(BaseMCP):
             result.append({
                 "id": cdrom.id,
                 "file": cdrom.file.id if cdrom.file else "",
-                "storage_domain": cdrom.storage_domain.name if cdrom.storage_domain else "",
+                "storage_domain": self._storage_domain_name(cdrom.storage_domain),
             })
 
         return result
@@ -545,7 +545,7 @@ class VmExtendedMCP(BaseMCP):
         return [
             {
                 "id": s.id,
-                "user": s.user.name if s.user else "",
+                "user": self._user_name(s.user),
                 "user_id": s.user.id if s.user else "",
                 "protocol": str(s.protocol.value) if s.protocol else "",
                 "console_user": s.console_user if hasattr(s, 'console_user') else False,
@@ -585,8 +585,8 @@ class VmExtendedMCP(BaseMCP):
                 "size": p.size if hasattr(p, 'size') else 0,
                 "max_user_vms": p.max_user_vms if hasattr(p, 'max_user_vms') else 0,
                 "prestarted_vms": p.prestarted_vms if hasattr(p, 'prestarted_vms') else 0,
-                "cluster": p.cluster.name if p.cluster else "",
-                "template": p.vm.name if p.vm else "",
+                "cluster": self._cluster_name(p.cluster),
+                "template": self._vm_name(p.vm),
                 "stateful": p.stateful if hasattr(p, 'stateful') else False,
             }
             for p in pools
@@ -606,7 +606,7 @@ class VmExtendedMCP(BaseMCP):
 
         # 尝试按 ID 获取
         try:
-            pool = pools_service.vm_pool_service(name_or_id).get()
+            pool = pools_service.pool_service(name_or_id).get()
             if pool:
                 return self._format_pool_detail(pool)
         except Exception:
@@ -628,9 +628,9 @@ class VmExtendedMCP(BaseMCP):
             "size": pool.size if hasattr(pool, 'size') else 0,
             "max_user_vms": pool.max_user_vms if hasattr(pool, 'max_user_vms') else 0,
             "prestarted_vms": pool.prestarted_vms if hasattr(pool, 'prestarted_vms') else 0,
-            "cluster": pool.cluster.name if pool.cluster else "",
+            "cluster": self._cluster_name(pool.cluster),
             "cluster_id": pool.cluster.id if pool.cluster else "",
-            "template": pool.vm.name if pool.vm else "",
+            "template": self._vm_name(pool.vm),
             "template_id": pool.vm.id if pool.vm else "",
             "stateful": pool.stateful if hasattr(pool, 'stateful') else False,
             "display": {
@@ -715,7 +715,7 @@ class VmExtendedMCP(BaseMCP):
         pool_id = None
         pool_name = None
         try:
-            pool_service = pools_service.vm_pool_service(name_or_id)
+            pool_service = pools_service.pool_service(name_or_id)
             pool = pool_service.get()
             pool_id = name_or_id
             pool_name = pool.name
@@ -726,7 +726,7 @@ class VmExtendedMCP(BaseMCP):
             pool_id = pools[0].id
             pool_name = pools[0].name
 
-        pool_service = pools_service.vm_pool_service(pool_id)
+        pool_service = pools_service.pool_service(pool_id)
 
         try:
             pool_service.remove(force=force)
@@ -755,7 +755,7 @@ class VmExtendedMCP(BaseMCP):
         # 查找池
         pool_id = None
         try:
-            pool_service = pools_service.vm_pool_service(name_or_id)
+            pool_service = pools_service.pool_service(name_or_id)
             pool = pool_service.get()
             pool_id = name_or_id
         except Exception:
@@ -764,7 +764,7 @@ class VmExtendedMCP(BaseMCP):
                 raise ValueError(f"VM 池不存在: {name_or_id}")
             pool_id = pools[0].id
             pool = pools[0]
-            pool_service = pools_service.vm_pool_service(pool_id)
+            pool_service = pools_service.pool_service(pool_id)
 
         # 更新属性
         if new_name:

@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 """Tests for HostExtendedMCP class - 主机扩展模块测试."""
+from types import SimpleNamespace
+
 import pytest
 from unittest.mock import MagicMock
 
@@ -377,3 +379,95 @@ class TestHostExtendedMCPTools:
             assert tool in MCP_TOOLS, f"Missing tool: {tool}"
             assert "method" in MCP_TOOLS[tool]
             assert "description" in MCP_TOOLS[tool]
+
+
+class TestHostLiveEngineAttributes:
+    """Live Engine Host objects expose different attributes than assumed.
+
+    Regression cover for: ``os.type`` is a plain ``str`` (not an enum),
+    ``kvm`` / ``vdsm_version`` don't exist at all, and ``HostStorage`` has no
+    ``size`` / ``available`` / ``mount_point`` — capacity lives on the LUNs.
+    """
+
+    @staticmethod
+    def _live_host():
+        return SimpleNamespace(
+            id="host-77",
+            name="ovih02.dcz",
+            description=None,
+            status=SimpleNamespace(value="up"),
+            cluster=SimpleNamespace(name="Default", id="cluster-77"),
+            address="10.25.248.132",
+            port=22,
+            cpu=SimpleNamespace(
+                topology=SimpleNamespace(cores=64, sockets=2, threads=2),
+                speed=2600,
+            ),
+            memory=137438953472,  # 128 GB
+            os=SimpleNamespace(type="RHEL"),  # plain str, no .value, no .version
+            libvirt_version=SimpleNamespace(full_version="8.6.0"),
+            # NOTE: no `kvm` and no `vdsm_version` attributes exist at all
+        )
+
+    @staticmethod
+    def _live_storage():
+        return SimpleNamespace(
+            id="storage-1",
+            name="ovih02-dcz-DomData",
+            type=SimpleNamespace(value="fcp"),
+            path=None,
+            # no size / available / mount_point here
+            logical_units=[SimpleNamespace(size=107374182400, paths=1)],  # 100 GB
+        )
+
+    @staticmethod
+    def _mock_ovirt(host, storage_list):
+        mock_ovirt = MagicMock()
+        mock_ovirt.connected = True
+
+        host_service = MagicMock()
+        host_service.get.return_value = host
+        host_service.nics_service.return_value.list.return_value = []
+        host_service.storage_service.return_value.list.return_value = storage_list
+
+        hosts_service = MagicMock()
+        hosts_service.host_service.return_value = host_service
+        hosts_service.list.return_value = []
+
+        mock_ovirt.connection.system_service.return_value.hosts_service.return_value = (
+            hosts_service
+        )
+        return mock_ovirt
+
+    def test_get_host_reads_live_attributes(self):
+        from ovirt_engine_mcp_server.mcp_host_extended import HostExtendedMCP
+
+        mock_ovirt = self._mock_ovirt(self._live_host(), [self._live_storage()])
+
+        result = HostExtendedMCP(mock_ovirt).get_host("host-77")
+
+        assert result is not None
+        assert result["name"] == "ovih02.dcz"
+        assert result["status"] == "up"
+        assert result["os_type"] == "RHEL"  # plain str, must not touch .value
+        assert result["os_version"] == ""  # os.version is absent
+        assert result["kvm_version"] == ""  # attribute does not exist
+        assert result["vdsm_version"] == ""  # attribute does not exist
+        assert result["libvirt_version"] == "8.6.0"
+        assert result["storage"][0]["size_gb"] == 100  # from the LUNs
+
+    def test_list_host_storage_without_size_attributes(self):
+        from ovirt_engine_mcp_server.mcp_host_extended import HostExtendedMCP
+
+        mock_ovirt = self._mock_ovirt(self._live_host(), [self._live_storage()])
+
+        result = HostExtendedMCP(mock_ovirt).list_host_storage("host-77")
+
+        assert len(result) == 1
+        entry = result[0]
+        assert entry["name"] == "ovih02-dcz-DomData"
+        assert entry["type"] == "fcp"
+        assert entry["size_gb"] == 100  # summed from logical_units
+        assert entry["free_gb"] == 0  # no `available` attribute
+        assert entry["mount_point"] == ""  # no `mount_point` attribute
+        assert entry["path"] == ""  # None on this engine

@@ -105,3 +105,91 @@ class TestOvirtMCPServer:
 
         result = OvirtMCPServer._format_result({"error": "not found"})
         assert "not found" in result
+
+    def test_format_result_empty_list(self, mock_conn_class, mock_config):
+        from ovirt_engine_mcp_server.server import OvirtMCPServer
+
+        result = OvirtMCPServer._format_result([])
+        assert "没有找到匹配的结果" in result
+        assert "成功" not in result
+
+
+class TestToolRegistryConsistency:
+    """Every declared tool must resolve a handler and an explicit schema."""
+
+    @staticmethod
+    def _server(mock_conn_class, mock_config):
+        from ovirt_engine_mcp_server.server import OvirtMCPServer
+
+        mock_conn = MagicMock()
+        mock_conn.test.return_value = True
+        mock_conn_class.return_value = mock_conn
+        return OvirtMCPServer(mock_config)
+
+    @patch("ovirt_engine_mcp_server.ovirt_mcp.Connection")
+    def test_every_tool_resolves_a_handler(self, mock_conn_class, mock_config):
+        from ovirt_engine_mcp_server.server import MCP_TOOLS
+
+        server = self._server(mock_conn_class, mock_config)
+        unresolved = sorted(set(MCP_TOOLS) - set(server.tool_handlers))
+        assert unresolved == [], f"tools without a handler: {unresolved}"
+
+    @patch("ovirt_engine_mcp_server.ovirt_mcp.Connection")
+    def test_every_tool_has_an_explicit_schema(self, mock_conn_class, mock_config):
+        from ovirt_engine_mcp_server.server import TOOL_SCHEMAS
+
+        server = self._server(mock_conn_class, mock_config)
+        missing = sorted(n for n in server.tool_handlers if n not in TOOL_SCHEMAS)
+        assert missing == [], f"tools without a schema: {missing}"
+
+    @patch("ovirt_engine_mcp_server.ovirt_mcp.Connection")
+    def test_schema_required_args_match_handler(self, mock_conn_class, mock_config):
+        import inspect
+
+        from ovirt_engine_mcp_server.server import TOOL_SCHEMAS
+
+        server = self._server(mock_conn_class, mock_config)
+        gaps = []
+        for tool, fn in server.tool_handlers.items():
+            required = set(TOOL_SCHEMAS.get(tool, {}).get("required", []))
+            for param in inspect.signature(fn).parameters.values():
+                if param.default is inspect.Parameter.empty and param.name not in required:
+                    gaps.append(f"{tool}.{param.name}")
+        assert gaps == [], f"required args not declared: {gaps}"
+
+    @patch("ovirt_engine_mcp_server.ovirt_mcp.Connection")
+    def test_schema_properties_exist_in_handler(self, mock_conn_class, mock_config):
+        import inspect
+
+        from ovirt_engine_mcp_server.server import TOOL_SCHEMAS
+
+        server = self._server(mock_conn_class, mock_config)
+        strays = []
+        for tool in server.tool_handlers:
+            signature = inspect.signature(server.tool_handlers[tool])
+            for prop in TOOL_SCHEMAS.get(tool, {}).get("properties", {}):
+                if prop not in signature.parameters:
+                    strays.append(f"{tool}.{prop}")
+        assert strays == [], f"schema params the handler would reject: {strays}"
+
+    @patch("ovirt_engine_mcp_server.ovirt_mcp.Connection")
+    def test_vm_rename_registered(self, mock_conn_class, mock_config):
+        from ovirt_engine_mcp_server.server import MCP_TOOLS, TOOL_SCHEMAS
+
+        server = self._server(mock_conn_class, mock_config)
+        assert "vm_rename" in MCP_TOOLS
+        assert "vm_rename" in server.tool_handlers
+        assert TOOL_SCHEMAS["vm_rename"]["required"] == ["name_or_id", "new_name"]
+
+    @patch("ovirt_engine_mcp_server.ovirt_mcp.Connection")
+    def test_vm_rename_validated(self, mock_conn_class, mock_config):
+        from ovirt_engine_mcp_server.errors import ValidationError
+        from ovirt_engine_mcp_server.validation import validate_tool_args
+
+        cleaned = validate_tool_args(
+            "vm_rename", {"name_or_id": " test-vm ", "new_name": " new-vm "}
+        )
+        assert cleaned == {"name_or_id": "test-vm", "new_name": "new-vm"}
+
+        with pytest.raises(ValidationError):
+            validate_tool_args("vm_rename", {"name_or_id": "test-vm", "new_name": "  "})

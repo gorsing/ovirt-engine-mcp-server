@@ -131,6 +131,14 @@ TOOL_SCHEMAS: Dict[str, dict] = {
         },
         "required": ["name_or_id"],
     },
+    "vm_rename": {
+        "type": "object",
+        "properties": {
+            "name_or_id": {"type": "string", "description": "VM 当前名称或 ID"},
+            "new_name": {"type": "string", "description": "新名称"},
+        },
+        "required": ["name_or_id", "new_name"],
+    },
     "vm_stats": {
         "type": "object",
         "properties": {"name_or_id": {"type": "string", "description": "VM 名称或 ID"}},
@@ -200,6 +208,32 @@ TOOL_SCHEMAS: Dict[str, dict] = {
         "type": "object",
         "properties": {"cluster": {"type": "string", "description": "集群名称（可选）"}},
     },
+    "network_create": {
+        "type": "object",
+        "properties": {
+            "name": {"type": "string", "description": "网络名称"},
+            "datacenter": {"type": "string", "description": "数据中心名称"},
+            "vlan": {"type": "string", "description": "VLAN ID（可选）"},
+            "description": {"type": "string", "description": "描述"},
+            "mtu": {"type": "number", "description": "MTU"},
+        },
+        "required": ["name", "datacenter"],
+    },
+    "network_update": {
+        "type": "object",
+        "properties": {
+            "name": {"type": "string", "description": "网络名称"},
+            "new_name": {"type": "string", "description": "新名称"},
+            "description": {"type": "string", "description": "新描述"},
+            "mtu": {"type": "number", "description": "新 MTU"},
+        },
+        "required": ["name"],
+    },
+    "network_delete": {
+        "type": "object",
+        "properties": {"name": {"type": "string", "description": "网络名称"}},
+        "required": ["name"],
+    },
     "nic_list": {
         "type": "object",
         "properties": {"name_or_id": {"type": "string", "description": "VM 名称或 ID"}},
@@ -241,6 +275,16 @@ TOOL_SCHEMAS: Dict[str, dict] = {
 
     # Cluster tools
     "cluster_list": {"type": "object", "properties": {}},
+    "cluster_get": {
+        "type": "object",
+        "properties": {"name": {"type": "string", "description": "集群名称"}},
+        "required": ["name"],
+    },
+    "cluster_memory_usage": {
+        "type": "object",
+        "properties": {"name": {"type": "string", "description": "集群名称"}},
+        "required": ["name"],
+    },
     "cluster_hosts": {
         "type": "object",
         "properties": {"name": {"type": "string", "description": "集群名称"}},
@@ -568,6 +612,13 @@ TOOL_SCHEMAS: Dict[str, dict] = {
     },
 
     # RBAC - User tools
+    "user_groups": {
+        "type": "object",
+        "properties": {
+            "name_or_id": {"type": "string", "description": "用户名称或 ID"}
+        },
+        "required": ["name_or_id"],
+    },
     "user_list": {
         "type": "object",
         "properties": {"search": {"type": "string", "description": "搜索条件（可选）"}},
@@ -1301,29 +1352,23 @@ TOOL_SCHEMAS: Dict[str, dict] = {
     "user_create": {
         "type": "object",
         "properties": {
-            "username": {"type": "string", "description": "用户名"},
+            "user_name": {"type": "string", "description": "用户名（格式：user@domain）"},
+            "domain": {"type": "string", "description": "域名称"},
             "email": {"type": "string", "description": "邮箱"},
-            "first_name": {"type": "string", "description": "名"},
-            "last_name": {"type": "string", "description": "姓"},
+            "department": {"type": "string", "description": "部门"},
         },
-        "required": ["username"],
+        "required": ["user_name", "domain"],
     },
     "user_update": {
         "type": "object",
         "properties": {
             "name_or_id": {"type": "string", "description": "用户名称或 ID"},
             "email": {"type": "string", "description": "新邮箱"},
-            "first_name": {"type": "string", "description": "新名"},
-            "last_name": {"type": "string", "description": "新姓"},
+            "department": {"type": "string", "description": "新部门"},
         },
         "required": ["name_or_id"],
     },
     "user_delete": {
-        "type": "object",
-        "properties": {"name_or_id": {"type": "string", "description": "用户名称或 ID"}},
-        "required": ["name_or_id"],
-    },
-    "user_group_list": {
         "type": "object",
         "properties": {"name_or_id": {"type": "string", "description": "用户名称或 ID"}},
         "required": ["name_or_id"],
@@ -1353,9 +1398,13 @@ EXTENSION_METHODS = {
     # ClusterMCP
     "get_cluster": "cluster_mcp",
     "get_cluster_memory_usage": "cluster_mcp",
+    "list_cluster_hosts": "cluster_mcp",
+    "list_cluster_vms": "cluster_mcp",
+    "get_cluster_cpu_load": "cluster_mcp",
     # TemplateMCP
-    "get_template": "template_mcp",
+    "get_template": "template_extended_mcp",
     "clone_template": "template_mcp",
+    "create_vm_from_template": "template_mcp",
     # DataCenterMCP
     "list_datacenters": "datacenter_mcp",
     "get_datacenter": "datacenter_mcp",
@@ -1537,6 +1586,27 @@ EXTENSION_METHODS = {
     "unassign_affinity_label": "affinity_mcp",
 }
 
+# Instance attributes holding the extension modules above. Used as a
+# last-resort scan in ``_resolve_handler`` so a method missing from
+# EXTENSION_METHODS still resolves instead of failing with
+# "Method not found" at call time.
+EXTENSION_INSTANCE_ATTRS = (
+    "network_mcp",
+    "cluster_mcp",
+    "template_mcp",
+    "rbac_mcp",
+    "datacenter_mcp",
+    "host_extended_mcp",
+    "storage_extended_mcp",
+    "disk_extended_mcp",
+    "events_mcp",
+    "affinity_mcp",
+    "vm_extended_mcp",
+    "template_extended_mcp",
+    "quota_mcp",
+    "system_mcp",
+)
+
 
 class OvirtMCPServer:
     """oVirt MCP Server — bridges MCP protocol to oVirt Engine SDK."""
@@ -1582,6 +1652,15 @@ class OvirtMCPServer:
         # Fall back to OvirtMCP
         if hasattr(self.connection, method_name):
             return getattr(self.connection, method_name)
+
+        # Last resort: scan every extension instance. EXTENSION_METHODS is a
+        # hand-maintained allow-list and used to omit several real methods
+        # (list_cluster_hosts, list_cluster_vms, get_cluster_cpu_load,
+        # create_vm_from_template), which surfaced as "Method not found".
+        for attr in EXTENSION_INSTANCE_ATTRS:
+            instance = getattr(self, attr, None)
+            if instance is not None and hasattr(instance, method_name):
+                return getattr(instance, method_name)
 
         return None
 
@@ -1629,6 +1708,15 @@ class OvirtMCPServer:
                 result = await asyncio.get_event_loop().run_in_executor(
                     None, functools.partial(handler, **validated)
                 )
+                # A *_get lookup that resolves to None means "not found";
+                # formatting it plainly reported a bogus success.
+                if result is None and name.endswith("_get"):
+                    return [
+                        TextContent(
+                            type="text",
+                            text=f"❌ 未找到匹配的资源: {arguments}",
+                        )
+                    ]
                 return [TextContent(type="text", text=self._format_result(result))]
 
             except OvirtMCPError as e:
@@ -1666,7 +1754,7 @@ class OvirtMCPServer:
     @staticmethod
     def _format_result(data: Any) -> str:
         """Format tool result for MCP text response."""
-        if not data:
+        if data is None:
             return "✅ 操作成功"
         if isinstance(data, str):
             return data
@@ -1690,6 +1778,8 @@ class OvirtMCPServer:
             return "结果：\n" + "\n".join(
                 f"  {k}: {v}" for k, v in list(data.items())[:15]
             )
+        if not data:
+            return "✅ 操作成功"
         return str(data)
 
 

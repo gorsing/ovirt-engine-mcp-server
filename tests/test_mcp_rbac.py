@@ -589,3 +589,21 @@ class TestRbacMCPTools:
             assert tool in MCP_TOOLS, f"Missing tool: {tool}"
             assert "method" in MCP_TOOLS[tool]
             assert "description" in MCP_TOOLS[tool]
+
+
+class TestRbacMCPUnsupportedCollections:
+    """oVirt 4.5 REST exposes no permission-filter collection.
+
+    ``/api/filters`` and ``/api/permissionfilters`` are 404, so the tool must
+    report "unsupported" instead of crashing with AttributeError or pretending
+    there are no filters.
+    """
+
+    def test_list_filters_reports_unsupported_api(self):
+        from ovirt_engine_mcp_server.mcp_rbac import RbacMCP
+
+        mock_ovirt = MagicMock()
+        mock_ovirt.connected = True
+
+        with pytest.raises(ValueError, match="权限过滤器不可用"):
+            RbacMCP(mock_ovirt).list_filters()

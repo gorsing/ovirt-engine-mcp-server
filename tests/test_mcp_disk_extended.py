@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 """Tests for DiskExtendedMCP class - 磁盘扩展模块测试."""
+from types import SimpleNamespace
+
 import pytest
 from unittest.mock import MagicMock
 
@@ -39,6 +41,48 @@ def _create_mock_vm(vm_id="vm-123", name="test-vm"):
 
 class TestDiskExtendedMCPGetDisk:
     """测试 get_disk 方法"""
+
+    def test_get_disk_storage_domain_from_storage_domains(self):
+        """Live disks leave ``storage_domain`` empty and fill the plural ref."""
+        from ovirt_engine_mcp_server.mcp_disk_extended import DiskExtendedMCP
+
+        mock_disk = MagicMock()
+        mock_disk.id = "disk-1"
+        mock_disk.name = "CentOS10_Disk1"
+        mock_disk.description = ""
+        mock_disk.status = MagicMock()
+        mock_disk.status.value = "ok"
+        mock_disk.provisioned_size = 10737418240
+        mock_disk.actual_size = 10737418240
+        mock_disk.format = MagicMock()
+        mock_disk.format.value = "raw"
+        mock_disk.storage_type = MagicMock()
+        mock_disk.storage_type.value = "image"
+        mock_disk.sparse = True
+        mock_disk.interface = MagicMock()
+        mock_disk.interface.value = "virtio"
+        mock_disk.storage_domain = None  # live engine: singular ref is empty
+        mock_disk.storage_domains = [SimpleNamespace(id="sd-9", name=None)]
+        mock_disk.shareable = False
+        mock_disk.wipe_after_delete = False
+        mock_disk.vms = None  # live engine: no VM back-reference
+
+        mock_ovirt = MagicMock()
+        mock_ovirt.connected = True
+        system = mock_ovirt.connection.system_service.return_value
+        system.disks_service.return_value.disk_service.return_value.get.return_value = mock_disk
+        sd = (
+            system.storage_domains_service.return_value.storage_domain_service
+            .return_value.get.return_value
+        )
+        sd.name = "hosted_storage"
+
+        result = DiskExtendedMCP(mock_ovirt).get_disk("disk-1")
+
+        assert result is not None
+        assert result["storage_domain"] == "hosted_storage"
+        assert result["storage_domain_id"] == "sd-9"
+        assert result["attachments"] == []  # Disk.vms is None on this engine
 
     def test_get_disk_by_id(self):
         """测试通过 ID 获取磁盘"""
