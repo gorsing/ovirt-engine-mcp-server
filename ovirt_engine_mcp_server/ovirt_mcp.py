@@ -283,7 +283,7 @@ class OvirtMCP:
                 memory=memory_mb * 1024 * 1024,
                 cpu=sdk.types.Cpu(topology=sdk.types.CpuTopology(cores=cpu_cores, sockets=1)),
                 description=description,
-                os=sdk.types.OperatingSystem(boot=sdk.types.Boot(boot_devices=[sdk.types.BootDevice.HD]))
+                os=sdk.types.OperatingSystem(boot=sdk.types.Boot(devices=[sdk.types.BootDevice.HD]))
             )
         )
         
@@ -662,10 +662,15 @@ class OvirtMCP:
         if not vm: raise ValueError(f"VM not found: {name_or_id}")
         
         vm_disk_service = self.connection.system_service().vms_service().vm_service(vm["id"]).disk_attachments_service()
+        # The engine refuses to run a VM that has no bootable disk (HTTP 409),
+        # so mark the first attached disk as bootable.
+        existing = vm_disk_service.list()
+        has_bootable = any(getattr(a, "bootable", False) for a in existing)
         vm_disk_service.add(
             sdk.types.DiskAttachment(
                 disk=sdk.types.Disk(id=disk_id),
-                interface=sdk.types.DiskInterface.VIRTIO
+                interface=sdk.types.DiskInterface.VIRTIO,
+                bootable=not has_bootable,
             )
         )
         
@@ -2054,10 +2059,15 @@ class OvirtMCP:
         
         # Use VM's disk_attachments_service (correct oVirt SDK API)
         attachments_service = self.connection.system_service().vms_service().vm_service(vm["id"]).disk_attachments_service()
+        # Mark the first disk bootable: the engine refuses to run a VM
+        # without at least one bootable disk (HTTP 409).
+        existing = attachments_service.list()
+        has_bootable = any(getattr(a, "bootable", False) for a in existing)
         attachments_service.add(
             types.DiskAttachment(
                 disk=types.Disk(id=disk["id"]),
                 interface=types.DiskInterface.VIRTIO,
+                bootable=not has_bootable,
             )
         )
         
