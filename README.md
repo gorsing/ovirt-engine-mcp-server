@@ -19,7 +19,6 @@ There is no package on PyPI yet — install from source:
 ```bash
 git clone https://github.com/imjoey/ovirt-engine-mcp-server.git
 cd ovirt-engine-mcp-server
-git checkout local-integration
 pip install -e ".[dev]"
 ```
 
