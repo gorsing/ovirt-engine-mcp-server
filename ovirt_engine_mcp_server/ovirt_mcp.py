@@ -1401,7 +1401,7 @@ class OvirtMCP(LinkNameMixin):
             "id": numa_node.id,
             "index": numa_node.index,
             "cpu_cores": [core.index for core in (numa_node.cpu.cores or [])] if numa_node.cpu else [],
-            "memory_mb": int((numa_node.memory or 0) / (1024**2)),
+            "memory_mb": int(numa_node.memory or 0),  # live engines report MB, not bytes
             "statistics": stats_data,
             "host_id": host["id"],
             "host_name": host["name"],
@@ -1517,7 +1517,7 @@ class OvirtMCP(LinkNameMixin):
         
         results = []
         for device in devices:
-            dev_cap = str(device.capability.value) if hasattr(device, 'capability') and device.capability else "unknown"
+            dev_cap = str(getattr(device.capability, "value", device.capability)) if hasattr(device, 'capability') and device.capability else "unknown"
             
             # Filter by capability if specified
             if capability and dev_cap != capability.lower():
@@ -1553,7 +1553,7 @@ class OvirtMCP(LinkNameMixin):
         return {
             "id": device.id,
             "name": device.name,
-            "capability": str(device.capability.value) if hasattr(device, 'capability') and device.capability else "unknown",
+            "capability": str(getattr(device.capability, "value", device.capability)) if hasattr(device, 'capability') and device.capability else "unknown",
             "product_name": device.product.name if hasattr(device, 'product') and device.product else "",
             "product_id": device.product.id if hasattr(device, 'product') and device.product else "",
             "vendor_name": device.vendor.name if hasattr(device, 'vendor') and device.vendor else "",

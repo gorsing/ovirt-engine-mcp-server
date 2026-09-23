@@ -421,7 +421,7 @@ class TestHostLiveEngineAttributes:
         )
 
     @staticmethod
-    def _mock_ovirt(host, storage_list):
+    def _mock_ovirt(host, storage_list, devices=None, numa_nodes=None):
         mock_ovirt = MagicMock()
         mock_ovirt.connected = True
 
@@ -429,6 +429,8 @@ class TestHostLiveEngineAttributes:
         host_service.get.return_value = host
         host_service.nics_service.return_value.list.return_value = []
         host_service.storage_service.return_value.list.return_value = storage_list
+        host_service.devices_service.return_value.list.return_value = devices or []
+        host_service.numa_nodes_service.return_value.list.return_value = numa_nodes or []
 
         hosts_service = MagicMock()
         hosts_service.host_service.return_value = host_service
@@ -468,6 +470,101 @@ class TestHostLiveEngineAttributes:
         assert entry["name"] == "ovih02-dcz-DomData"
         assert entry["type"] == "fcp"
         assert entry["size_gb"] == 100  # summed from logical_units
-        assert entry["free_gb"] == 0  # no `available` attribute
+        assert entry["free_gb"] is None  # no `available` attribute: unknown, not zero
         assert entry["mount_point"] == ""  # no `mount_point` attribute
         assert entry["path"] == ""  # None on this engine
+
+    @staticmethod
+    def _live_device():
+        return SimpleNamespace(
+            id="7063695f303030305f30375f30305f30",
+            name="pci_0000_07_00_0",
+            capability="pci",  # plain str on live engines, no `.value`
+            product=SimpleNamespace(name="Virtio 1.0 RNG"),
+            vendor=SimpleNamespace(name="Red Hat, Inc."),
+            driver="virtio-pci",
+            iommu_group=None,
+        )
+
+    @staticmethod
+    def _live_numa_node():
+        return SimpleNamespace(
+            id="numa-node-0",
+            index=0,
+            memory=15933,  # live engines report MB, not bytes
+            cpu=SimpleNamespace(
+                topology=None,  # live engines leave topology empty
+                cores=[SimpleNamespace(index=i) for i in range(16)],
+            ),
+        )
+
+    def test_get_host_devices_plain_str_capability(self):
+        """Live `capability` is a plain str: `.value` must not be touched."""
+        from ovirt_engine_mcp_server.mcp_host_extended import HostExtendedMCP
+
+        mock_ovirt = self._mock_ovirt(self._live_host(), [], devices=[self._live_device()])
+
+        result = HostExtendedMCP(mock_ovirt).get_host_devices("host-77")
+
+        assert len(result) == 1
+        assert result[0]["capability"] == "pci"
+        assert result[0]["product"] == "Virtio 1.0 RNG"
+        assert result[0]["vendor"] == "Red Hat, Inc."
+        assert result[0]["driver"] == "virtio-pci"
+        assert result[0]["iommu_group"] is None
+
+    def test_get_host_numa_live_engine_values(self):
+        """Live NUMA: memory already in MB, topology None, cores as a list."""
+        from ovirt_engine_mcp_server.mcp_host_extended import HostExtendedMCP
+
+        mock_ovirt = self._mock_ovirt(
+            self._live_host(), [], numa_nodes=[self._live_numa_node()]
+        )
+
+        result = HostExtendedMCP(mock_ovirt).get_host_numa("host-77")
+
+        assert result["node_count"] == 1
+        node = result["numa_nodes"][0]
+        assert node["memory_mb"] == 15933
+        assert node["cpu"]["cores"] == 16
+        assert node["cpu"]["sockets"] == 0
+        assert node["cpu"]["threads"] == 0
+
+    def test_get_host_numa_prefers_declared_topology(self):
+        """When topology is present it wins over the core list."""
+        from ovirt_engine_mcp_server.mcp_host_extended import HostExtendedMCP
+
+        node = SimpleNamespace(
+            id="numa-node-1",
+            index=1,
+            memory=4096,
+            cpu=SimpleNamespace(
+                topology=SimpleNamespace(cores=4, sockets=1, threads=1),
+                cores=[],
+            ),
+        )
+        mock_ovirt = self._mock_ovirt(self._live_host(), [], numa_nodes=[node])
+
+        result = HostExtendedMCP(mock_ovirt).get_host_numa("host-77")
+
+        entry = result["numa_nodes"][0]
+        assert entry["memory_mb"] == 4096
+        assert entry["cpu"] == {"cores": 4, "sockets": 1, "threads": 1}
+
+    def test_list_host_storage_reports_available_as_gb(self):
+        """When the engine reports `available`, convert bytes to GB."""
+        from ovirt_engine_mcp_server.mcp_host_extended import HostExtendedMCP
+
+        storage = SimpleNamespace(
+            id="storage-2",
+            name="iso-domain",
+            type=SimpleNamespace(value="nfs"),
+            path="/exports/iso",
+            available=107374182400,  # 100 GB in bytes
+            logical_units=[],
+        )
+        mock_ovirt = self._mock_ovirt(self._live_host(), [storage])
+
+        result = HostExtendedMCP(mock_ovirt).list_host_storage("host-77")
+
+        assert result[0]["free_gb"] == 100

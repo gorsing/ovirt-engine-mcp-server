@@ -243,7 +243,7 @@ class HostExtendedMCP(BaseMCP):
             {
                 "id": d.id,
                 "name": d.name,
-                "capability": str(d.capability.value) if d.capability else "",
+                "capability": _enum_value(d.capability),
                 "product": d.product.name if d.product else "",
                 "vendor": d.vendor.name if d.vendor else "",
                 "driver": d.driver or "",
@@ -366,15 +366,21 @@ class HostExtendedMCP(BaseMCP):
 
         numa_nodes = []
         for node in nodes:
+            cpu = getattr(node, "cpu", None)
+            topology = cpu.topology if cpu else None
+            cores_list = list(getattr(cpu, "cores", None) or []) if cpu else []
+            # Live engines report `memory` already in MB (not bytes) and often
+            # leave `cpu.topology` as None while providing the core list instead.
+            cores = (topology.cores if topology else None) or len(cores_list)
             numa_nodes.append({
                 "id": node.id,
                 "index": node.index if hasattr(node, 'index') else 0,
-                "memory_mb": int((node.memory or 0) / (1024**2)),
+                "memory_mb": int(node.memory or 0),
                 "cpu": {
-                    "cores": node.cpu.topology.cores if node.cpu and node.cpu.topology else 0,
-                    "sockets": node.cpu.topology.sockets if node.cpu and node.cpu.topology else 0,
-                    "threads": node.cpu.topology.threads if node.cpu and node.cpu.topology else 0,
-                } if node.cpu else {},
+                    "cores": int(cores or 0),
+                    "sockets": int((topology.sockets if topology else None) or 0),
+                    "threads": int((topology.threads if topology else None) or 0),
+                } if cpu else {},
             })
 
         return {
@@ -584,18 +590,21 @@ class HostExtendedMCP(BaseMCP):
             logger.error(f"Failed to get host storage: {e}")
             return []
 
-        return [
-            {
+        entries = []
+        for s in storage_list:
+            # Live engines omit `available` on HostStorage (capacity lives on
+            # the LUNs) -- report None rather than a misleading zero.
+            available = getattr(s, "available", None)
+            entries.append({
                 "id": s.id,
                 "name": s.name or "",
                 "type": _enum_value(s.type),
                 "size_gb": int(_storage_bytes(s) / (1024**3)),
-                "free_gb": int((getattr(s, "available", None) or 0) / (1024**3)),
+                "free_gb": int(available / (1024**3)) if available is not None else None,
                 "mount_point": getattr(s, "mount_point", "") or "",
                 "path": getattr(s, "path", "") or "",
-            }
-            for s in storage_list
-        ]
+            })
+        return entries
 
     # -- Host installation --------------------------------------------------------------
 
