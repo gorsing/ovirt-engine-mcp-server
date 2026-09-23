@@ -1,0 +1,13 @@
+# Gitleaks configuration for the CI "security" stage.
+#
+# Uses the built-in default rule set (secrets, keys, tokens, ...) and
+# allowlists the obviously fake credentials that unit tests pass around.
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Dummy credentials used in unit tests and fixtures"
+regexes = [
+    '''(?i)(password|passwd|secret|token)\s*=\s*["'](test|secret|changeme|dummy|placeholder|example)["']''',
+]

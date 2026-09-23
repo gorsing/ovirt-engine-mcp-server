@@ -1,0 +1,49 @@
+stages:
+  - security
+  - build
+
+variables:
+  # Can be overriden in project/group CI/CD settings
+  # BASE_REGISTRY: "artifactory.icz.icdc.io/icdc-docker-proxy"
+  # CI_REGISTRY: "artifactory.icz.icdc.io/sys-docker"
+  # GITLEAKS_IMAGE: "ghcr.io/gitleaks/gitleaks:latest"
+  # Service group inside the container registry (overridable in settings).
+  SERVICE_GROUP: "ai"
+  IMAGE_NAME: "$CI_PROJECT_NAME:$CI_COMMIT_SHORT_SHA"
+  FULL_IMAGE_NAME: "$CI_REGISTRY/$SERVICE_GROUP/$CI_PROJECT_NAME:$CI_COMMIT_SHORT_SHA"
+  LATEST_IMAGE: "$CI_REGISTRY/$SERVICE_GROUP/$CI_PROJECT_NAME:latest"
+
+gitleaks:
+  stage: security
+  tags:
+    - testing
+  variables:
+    GITLEAKS_IMAGE: "ghcr.io/gitleaks/gitleaks:latest"
+  before_script:
+    - podman pull "$GITLEAKS_IMAGE"
+  script:
+    - podman run --rm -v "$PWD:/src:Z" -w /src "$GITLEAKS_IMAGE" detect --no-banner --redact --config=.gitleaks.toml --source=.
+  after_script:
+    - podman image rm -f "$GITLEAKS_IMAGE" 2>/dev/null || true
+  allow_failure: true
+
+build:
+  stage: build
+  tags:
+    - testing
+  before_script:
+    - podman login "$CI_REGISTRY" -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD"
+  script:
+    # This Dockerfile takes no build args (python:3.12-slim is pulled
+    # directly), so only the context and -f are passed.
+    - echo "Building the project... $IMAGE_NAME"
+    - podman build -t "$IMAGE_NAME" -f Dockerfile .
+    - echo "Pushing the image to the registry... $FULL_IMAGE_NAME"
+    - podman tag "$IMAGE_NAME" "$FULL_IMAGE_NAME"
+    - podman push "$FULL_IMAGE_NAME"
+    - VERSION_IMAGE="$CI_REGISTRY/$SERVICE_GROUP/$CI_PROJECT_NAME:$(tr -d '[:space:]' < VERSION)"
+    - echo "Tagging with version from VERSION file... $VERSION_IMAGE"
+    - podman tag "$IMAGE_NAME" "$VERSION_IMAGE"
+    - podman push "$VERSION_IMAGE"
+    - podman tag "$IMAGE_NAME" "$LATEST_IMAGE"
+    - podman push "$LATEST_IMAGE"
