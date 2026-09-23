@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-oVirt MCP Server - 模板扩展模块
-提供模板详情、创建、删除、更新以及磁盘、网卡、实例类型等管理功能
+oVirt MCP Server - Template extensions module
+Provides template details, create, delete, update and disk, NIC, instance type management features
 """
 from typing import Dict, List, Any, Optional
 import logging
@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 
 class TemplateExtendedMCP(BaseMCP):
-    """模板扩展管理 MCP"""
+    """Template extended management MCP"""
 
     def __init__(self, ovirt_mcp):
         super().__init__(ovirt_mcp)
@@ -42,7 +42,7 @@ class TemplateExtendedMCP(BaseMCP):
                 .list()
             )
         except Exception as e:
-            logger.debug(f"获取模板磁盘附件失败: {e}")
+            logger.debug(f"Failed to get template disk attachments: {e}")
             return disks
 
         disks_service = self.connection.system_service().disks_service()
@@ -50,7 +50,7 @@ class TemplateExtendedMCP(BaseMCP):
             try:
                 disk = disks_service.disk_service(da.disk.id).get()
             except Exception as e:
-                logger.debug(f"获取模板磁盘详情失败: {e}")
+                logger.debug(f"Failed to get template disk details: {e}")
                 continue
             storage_domains = getattr(disk, "storage_domains", None) or []
             sd = storage_domains[0] if storage_domains else None
@@ -81,7 +81,7 @@ class TemplateExtendedMCP(BaseMCP):
                 .list()
             )
         except Exception as e:
-            logger.debug(f"获取模板网卡失败: {e}")
+            logger.debug(f"Failed to get template NICs: {e}")
             return nics
 
         for n in nic_list:
@@ -107,13 +107,13 @@ class TemplateExtendedMCP(BaseMCP):
 
     @require_connection
     def get_template(self, name_or_id: str) -> Optional[Dict]:
-        """获取模板详情
+        """Get template details
 
         Args:
-            name_or_id: 模板名称或 ID
+            name_or_id: Template name or ID
 
         Returns:
-            模板详情
+            Template details
         """
         template = self._find_template(name_or_id)
         if not template:
@@ -143,26 +143,26 @@ class TemplateExtendedMCP(BaseMCP):
     @require_connection
     def create_template(self, name: str, vm: str, description: str = "",
                        cluster: str = None) -> Dict[str, Any]:
-        """从虚拟机创建模板
+        """Create a template from a VM
 
         Args:
-            name: 模板名称
-            vm: 源虚拟机名称或 ID
-            description: 描述
-            cluster: 目标集群（可选）
+            name: Template name
+            vm: Source VM name or ID
+            description: Description
+            cluster: Target cluster (optional)
 
         Returns:
-            创建结果
+            Creation result
         """
-        # 查找 VM
+        # Find VM
         vm_obj = self._find_vm(vm)
         if not vm_obj:
-            raise ValueError(f"VM 不存在: {vm}")
+            raise ValueError(f"VM not found: {vm}")
 
         vms_service = self.connection.system_service().vms_service()
         vm_service = vms_service.vm_service(vm_obj.id)
 
-        # 构建模板
+        # Build template
         template_params = sdk.types.Template(
             name=name,
             description=description,
@@ -178,65 +178,65 @@ class TemplateExtendedMCP(BaseMCP):
 
             return {
                 "success": True,
-                "message": f"模板 {name} 正在创建",
+                "message": f"Template {name} is being created",
                 "template_id": template.id,
                 "source_vm": vm_obj.name,
             }
         except Exception as e:
-            raise RuntimeError(f"创建模板失败: {e}")
+            raise RuntimeError(f"Failed to create template: {e}")
 
     @require_connection
     def delete_template(self, name_or_id: str, force: bool = False) -> Dict[str, Any]:
-        """删除模板
+        """Delete a template
 
         Args:
-            name_or_id: 模板名称或 ID
-            force: 强制删除
+            name_or_id: Template name or ID
+            force: Force delete
 
         Returns:
-            删除结果
+            Deletion result
         """
         template = self._find_template(name_or_id)
         if not template:
-            raise ValueError(f"模板不存在: {name_or_id}")
+            raise ValueError(f"Template not found: {name_or_id}")
 
-        # 不能删除 Blank 模板
+        # Cannot delete the Blank template
         if template.name.lower() == "blank":
-            raise ValueError("不能删除 Blank 模板")
+            raise ValueError("Cannot delete the Blank template")
 
         templates_service = self.connection.system_service().templates_service()
         template_service = templates_service.template_service(template.id)
 
         try:
             template_service.remove(force=force)
-            return {"success": True, "message": f"模板 {template.name} 已删除"}
+            return {"success": True, "message": f"Template {template.name} deleted"}
         except Exception as e:
-            raise RuntimeError(f"删除模板失败: {e}")
+            raise RuntimeError(f"Failed to delete template: {e}")
 
     @require_connection
     def update_template(self, name_or_id: str, new_name: str = None,
                        description: str = None, memory_mb: int = None,
                        cpu_cores: int = None) -> Dict[str, Any]:
-        """更新模板
+        """Update a template
 
         Args:
-            name_or_id: 模板名称或 ID
-            new_name: 新名称
-            description: 新描述
-            memory_mb: 内存（MB）
-            cpu_cores: CPU 核数
+            name_or_id: Template name or ID
+            new_name: New name
+            description: New description
+            memory_mb: Memory (MB)
+            cpu_cores: CPU cores
 
         Returns:
-            更新结果
+            Update result
         """
         template = self._find_template(name_or_id)
         if not template:
-            raise ValueError(f"模板不存在: {name_or_id}")
+            raise ValueError(f"Template not found: {name_or_id}")
 
         templates_service = self.connection.system_service().templates_service()
         template_service = templates_service.template_service(template.id)
 
-        # 更新属性
+        # Update properties
         if new_name:
             template.name = new_name
         if description is not None:
@@ -248,57 +248,57 @@ class TemplateExtendedMCP(BaseMCP):
 
         try:
             template_service.update(template)
-            return {"success": True, "message": f"模板已更新"}
+            return {"success": True, "message": f"Template updated"}
         except Exception as e:
-            raise RuntimeError(f"更新模板失败: {e}")
+            raise RuntimeError(f"Failed to update template: {e}")
 
     @require_connection
     def list_template_disks(self, name_or_id: str) -> List[Dict]:
-        """列出模板的磁盘
+        """List template disks
 
         Args:
-            name_or_id: 模板名称或 ID
+            name_or_id: Template name or ID
 
         Returns:
-            磁盘列表
+            Disk list
         """
         template = self._find_template(name_or_id)
         if not template:
-            raise ValueError(f"模板不存在: {name_or_id}")
+            raise ValueError(f"Template not found: {name_or_id}")
 
         return self._template_disks(template.id)
 
     @require_connection
     def list_template_nics(self, name_or_id: str) -> List[Dict]:
-        """列出模板的网卡
+        """List template NICs
 
         Args:
-            name_or_id: 模板名称或 ID
+            name_or_id: Template name or ID
 
         Returns:
-            网卡列表
+            NIC list
         """
         template = self._find_template(name_or_id)
         if not template:
-            raise ValueError(f"模板不存在: {name_or_id}")
+            raise ValueError(f"Template not found: {name_or_id}")
 
         return self._template_nics(template.id)
 
-    # ── Instance Type 管理 ──────────────────────────────────────────────────
+    # -- Instance Type management --------------------------------------------------
 
     @require_connection
     def list_instance_types(self) -> List[Dict]:
-        """列出实例类型
+        """List instance types
 
         Returns:
-            实例类型列表
+            List of instance types
         """
         instance_types_service = self.connection.system_service().instance_types_service()
 
         try:
             types = instance_types_service.list()
         except Exception as e:
-            logger.error(f"获取实例类型列表失败: {e}")
+            logger.error(f"Failed to get instance type list: {e}")
             return []
 
         return [
@@ -315,17 +315,17 @@ class TemplateExtendedMCP(BaseMCP):
 
     @require_connection
     def get_instance_type(self, name_or_id: str) -> Optional[Dict]:
-        """获取实例类型详情
+        """Get instance type details
 
         Args:
-            name_or_id: 实例类型名称或 ID
+            name_or_id: Instance type name or ID
 
         Returns:
-            实例类型详情
+            Instance type details
         """
         instance_types_service = self.connection.system_service().instance_types_service()
 
-        # 尝试按 ID 获取
+        # Try to get by ID
         try:
             it = instance_types_service.instance_type_service(name_or_id).get()
             if it:
@@ -333,7 +333,7 @@ class TemplateExtendedMCP(BaseMCP):
         except Exception:
             pass
 
-        # 按名称搜索
+        # Search by name
         types = instance_types_service.list(search=f"name={_sanitize_search_value(name_or_id)}")
         if not types:
             return None
@@ -341,7 +341,7 @@ class TemplateExtendedMCP(BaseMCP):
         return self._format_instance_type(types[0])
 
     def _format_instance_type(self, it) -> Dict:
-        """格式化实例类型"""
+        """Format instance type"""
         return {
             "id": it.id,
             "name": it.name,
@@ -355,19 +355,19 @@ class TemplateExtendedMCP(BaseMCP):
         }
 
 
-# MCP 工具注册表
+# MCP tool registry
 MCP_TOOLS = {
-    # 模板管理
-    "template_get": {"method": "get_template", "description": "获取模板详情"},
-    "template_create": {"method": "create_template", "description": "从虚拟机创建模板"},
-    "template_delete": {"method": "delete_template", "description": "删除模板"},
-    "template_update": {"method": "update_template", "description": "更新模板"},
+    # Template management
+    "template_get": {"method": "get_template", "description": "Get template details"},
+    "template_create": {"method": "create_template", "description": "Create a template from a VM"},
+    "template_delete": {"method": "delete_template", "description": "Delete a template"},
+    "template_update": {"method": "update_template", "description": "Update a template"},
 
-    # 模板磁盘和网卡
-    "template_disk_list": {"method": "list_template_disks", "description": "列出模板的磁盘"},
-    "template_nic_list": {"method": "list_template_nics", "description": "列出模板的网卡"},
+    # Template disks and NICs
+    "template_disk_list": {"method": "list_template_disks", "description": "List template disks"},
+    "template_nic_list": {"method": "list_template_nics", "description": "List template NICs"},
 
-    # 实例类型
-    "instance_type_list": {"method": "list_instance_types", "description": "列出实例类型"},
-    "instance_type_get": {"method": "get_instance_type", "description": "获取实例类型详情"},
+    # Instance types
+    "instance_type_list": {"method": "list_instance_types", "description": "List instance types"},
+    "instance_type_get": {"method": "get_instance_type", "description": "Get instance type details"},
 }

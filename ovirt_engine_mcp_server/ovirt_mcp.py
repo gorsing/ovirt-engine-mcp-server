@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-oVirt Connection - 增强版 MCP 工具集
-包含完整的 VM、存储、网络、快照、备份等管理能力
+oVirt Connection - Enhanced MCP toolset
+Full management capabilities for VMs, storage, networks, snapshots, backups, and more
 """
 import logging
 import threading
@@ -38,7 +38,7 @@ class VMStatus(Enum):
 
 @dataclass
 class VMInfo:
-    """虚拟机完整信息"""
+    """Complete VM information."""
     id: str
     name: str
     status: str
@@ -56,7 +56,7 @@ class VMInfo:
 
 @dataclass
 class SnapshotInfo:
-    """快照信息"""
+    """Snapshot information."""
     id: str
     name: str
     description: str
@@ -68,7 +68,7 @@ class SnapshotInfo:
 
 @dataclass
 class DiskInfo:
-    """磁盘信息"""
+    """Disk information."""
     id: str
     name: str
     size_gb: int
@@ -79,7 +79,7 @@ class DiskInfo:
 
 
 class OvirtMCP(LinkNameMixin):
-    """oVirt MCP 工具集 - 完整的运维能力"""
+    """oVirt MCP toolset - full operational capabilities."""
     
     def __init__(self, config: "Config") -> None:
         self.config = config
@@ -90,7 +90,7 @@ class OvirtMCP(LinkNameMixin):
         self._connection_lock = threading.Lock()  # Thread safety for connection operations
     
     def connect(self) -> bool:
-        """连接 oVirt Engine (thread-safe)"""
+        """Connect to oVirt Engine (thread-safe)."""
         with self._connection_lock:
             try:
                 self.connection = Connection(
@@ -104,14 +104,14 @@ class OvirtMCP(LinkNameMixin):
                 self.connection.test()
                 self.connected = True
                 self._reconnect_attempts = 0
-                logger.info("✅ 已连接到 oVirt Engine")
+                logger.info("Connected to oVirt Engine")
                 return True
             except Exception as e:
-                logger.error(sanitize_log_message(f"❌ 连接失败: {e}"))
+                logger.error(sanitize_log_message(f"Connection failed: {e}"))
                 return False
     
     def is_connected(self) -> bool:
-        """检查连接是否有效"""
+        """Check whether the connection is still valid."""
         if not self.connection or not self.connected:
             return False
         try:
@@ -122,21 +122,21 @@ class OvirtMCP(LinkNameMixin):
             return False
     
     def disconnect(self) -> bool:
-        """断开 oVirt Engine 连接 (thread-safe)"""
+        """Disconnect from oVirt Engine (thread-safe)."""
         with self._connection_lock:
             try:
                 if self.connection:
                     self.connection.close()
                 self.connected = False
                 self.connection = None
-                logger.info("✅ 已断开 oVirt Engine 连接")
+                logger.info("Disconnected from oVirt Engine")
                 return True
             except Exception as e:
-                logger.error(sanitize_log_message(f"❌ 断开连接失败: {e}"))
+                logger.error(sanitize_log_message(f"Disconnect failed: {e}"))
                 return False
     
     def _ensure_connected(self) -> None:
-        """确保连接有效，必要时自动重连 (thread-safe)
+        """Ensure the connection is valid; reconnect automatically when needed (thread-safe)
         
         NOTE: Uses blocking time.sleep() for reconnect backoff.
         In async contexts, consider running in a thread pool.
@@ -152,9 +152,9 @@ class OvirtMCP(LinkNameMixin):
             
             for attempt, delay in enumerate(backoff_times):
                 if self._reconnect_attempts >= self._max_reconnect_attempts:
-                    raise RuntimeError(f"连接失败，已达到最大重试次数 ({self._max_reconnect_attempts})")
+                    raise RuntimeError(f"Connection failed after maximum retry attempts ({self._max_reconnect_attempts})")
                 
-                logger.warning(f"连接已断开，尝试重连 ({attempt + 1}/{self._max_reconnect_attempts})...")
+                logger.warning(f"Connection lost, reconnecting ({attempt + 1}/{self._max_reconnect_attempts})...")
                 # NOTE: Blocking sleep - see docstring
                 time.sleep(delay)
                 
@@ -170,18 +170,18 @@ class OvirtMCP(LinkNameMixin):
                     self.connection.test()
                     self.connected = True
                     self._reconnect_attempts = 0
-                    logger.info("✅ 重连成功")
+                    logger.info("Reconnected successfully")
                     return
                 except Exception as e:
-                    logger.error(sanitize_log_message(f"重连失败: {e}"))
+                    logger.error(sanitize_log_message(f"Reconnect failed: {e}"))
                     self._reconnect_attempts += 1
             
-            raise RuntimeError("连接失败，请检查 oVirt Engine 状态")
+            raise RuntimeError("Connection failed, check oVirt Engine status")
 
-    # ==================== VM 管理 ====================
+    # ==================== VM management ====================
     
     def list_vms(self, cluster: Optional[str] = None, status: Optional[str] = None) -> List[VMInfo]:
-        """列出虚拟机"""
+        """List VMs."""
         self._ensure_connected()
         
         vms_service = self.connection.system_service().vms_service()
@@ -195,19 +195,19 @@ class OvirtMCP(LinkNameMixin):
         return [self._map_vm_full(vm) for vm in vms]
     
     def get_vm(self, name_or_id: str) -> Optional[VMInfo]:
-        """获取虚拟机详情"""
+        """Get VM details."""
         self._ensure_connected()
         
         vms_service = self.connection.system_service().vms_service()
         
-        # 尝试 ID
+        # Try by ID
         try:
             vm = vms_service.vm_service(name_or_id).get()
             if vm: return self._map_vm_full(vm)
         except Exception as e:
             logger.debug(f"VM lookup by ID failed: {e}")
         
-        # 尝试名称
+        # Try by name
         vms = vms_service.list(search=f"name={_sanitize_search_value(name_or_id)}")
         if not vms:
             raise NotFoundError(f"VM not found: {name_or_id}")
@@ -335,7 +335,7 @@ class OvirtMCP(LinkNameMixin):
         return usage
 
     def _map_vm_full(self, vm: Any) -> VMInfo:
-        """映射完整 VM 信息"""
+        """Map full VM information."""
         disks = self._fetch_vm_disks(vm.id)
         nics = self._fetch_vm_nics(vm.id)
 
@@ -358,18 +358,18 @@ class OvirtMCP(LinkNameMixin):
     def create_vm(self, name: str, cluster: str, memory_mb: int = 4096, cpu_cores: int = 2,
                   template: str = "Blank", disk_size_gb: int = 50, description: str = "",
                   network: str = "ovirtmgmt", storage: str = "") -> Dict[str, Any]:
-        """创建虚拟机"""
+        """Create a VM."""
         self._ensure_connected()
         
-        # 获取集群
+        # Get cluster
         clusters = self.connection.system_service().clusters_service().list(search=f"name={_sanitize_search_value(cluster)}")
-        if not clusters: raise ValueError(f"集群不存在: {cluster}")
+        if not clusters: raise ValueError(f"Cluster not found: {cluster}")
         
-        # 获取模板
+        # Get template
         templates = self.connection.system_service().templates_service().list(search=f"name={_sanitize_search_value(template)}")
         template_id = templates[0].id if templates else "00000000-0000-0000-0000-000000000000"
         
-        # 创建 VM
+        # Create VM
         vm = self.connection.system_service().vms_service().add(
             sdk.types.Vm(
                 name=name,
@@ -382,16 +382,16 @@ class OvirtMCP(LinkNameMixin):
             )
         )
         
-        # 配置网络（如果指定）
+        # Configure the network (if specified)
         if network:
             try:
                 self._attach_network(vm.id, network)
             except Exception as e:
-                logger.warning(f"网络配置失败: {e}")
+                logger.warning(f"Network configuration failed: {e}")
         
         return {
             "success": True,
-            "message": f"虚拟机 {name} 创建成功",
+            "message": f"VM {name} created successfully",
             "vm_id": vm.id,
             "name": name,
             "memory_mb": memory_mb,
@@ -399,12 +399,12 @@ class OvirtMCP(LinkNameMixin):
         }
     
     def _attach_network(self, vm_id: str, network_name: str) -> None:
-        """为 VM 附加网卡"""
-        # 获取网络
+        """Attach a NIC to a VM."""
+        # Get network
         networks = self.connection.system_service().networks_service().list(search=f"name={_sanitize_search_value(network_name)}")
         if not networks: return
         
-        # 添加网卡
+        # Add NIC
         vm_nics_service = self.connection.system_service().vms_service().vm_service(vm_id).nics_service()
         vm_nics_service.add(
             sdk.types.Nic(
@@ -415,43 +415,43 @@ class OvirtMCP(LinkNameMixin):
         )
     
     def start_vm(self, name_or_id: str) -> Dict[str, Any]:
-        """启动虚拟机"""
+        """Start a VM."""
         vm = self._find_vm(name_or_id)
         if not vm: raise ValueError(f"VM not found: {name_or_id}")
         
         vm_service = self.connection.system_service().vms_service().vm_service(vm["id"])
         vm_service.start()
         
-        return {"success": True, "message": f"虚拟机 {vm['name']} 启动中...", "vm_id": vm["id"]}
+        return {"success": True, "message": f"Starting VM {vm['name']}...", "vm_id": vm["id"]}
     
     def stop_vm(self, name_or_id: str, graceful: bool = True) -> Dict[str, Any]:
-        """关闭虚拟机"""
+        """Stop a VM."""
         vm = self._find_vm(name_or_id)
         if not vm: raise ValueError(f"VM not found: {name_or_id}")
         
         vm_service = self.connection.system_service().vms_service().vm_service(vm["id"])
         vm_service.shutdown() if graceful else vm_service.stop()
         
-        return {"success": True, "message": f"虚拟机 {vm['name']} 关闭中...", "vm_id": vm["id"]}
+        return {"success": True, "message": f"Stopping VM {vm['name']}...", "vm_id": vm["id"]}
     
     def restart_vm(self, name_or_id: str) -> Dict[str, Any]:
-        """重启虚拟机"""
+        """Restart a VM."""
         vm = self._find_vm(name_or_id)
         if not vm: raise ValueError(f"VM not found: {name_or_id}")
         
         vm_service = self.connection.system_service().vms_service().vm_service(vm["id"])
         vm_service.reboot()
         
-        return {"success": True, "message": f"虚拟机 {vm['name']} 重启中...", "vm_id": vm["id"]}
+        return {"success": True, "message": f"Restarting VM {vm['name']}...", "vm_id": vm["id"]}
     
     def delete_vm(self, name_or_id: str, force: bool = False) -> Dict[str, Any]:
-        """删除虚拟机"""
+        """Delete a VM."""
         vm = self._find_vm(name_or_id)
         if not vm: raise ValueError(f"VM not found: {name_or_id}")
         
         vm_service = self.connection.system_service().vms_service().vm_service(vm["id"])
         
-        # 如果正在运行，先停止
+        # If running, stop it first
         try:
             current = vm_service.get()
             if current.status.value == "up":
@@ -459,29 +459,29 @@ class OvirtMCP(LinkNameMixin):
                     vm_service.stop()
                 else:
                     vm_service.shutdown()
-                # 等待停止
+                # Wait for shutdown
                 self._wait_for_status(vm["id"], "down", "vms")
         except Exception as e:
             logger.debug(f"Failed to stop VM before deletion: {e}")
         
         vm_service.remove()
         
-        return {"success": True, "message": f"虚拟机 {vm['name']} 已删除", "vm_id": vm["id"]}
+        return {"success": True, "message": f"VM {vm['name']} deleted", "vm_id": vm["id"]}
     
     def rename_vm(self, name_or_id: str, new_name: str) -> Dict[str, Any]:
-        """重命名虚拟机
+        """Rename a VM
 
         Args:
-            name_or_id: VM 当前名称或 ID
-            new_name: 新名称
+            name_or_id: Current VM name or ID
+            new_name: New name
 
         Returns:
-            重命名结果
+            Rename result
         """
         self._ensure_connected()
 
         if not new_name or not new_name.strip():
-            raise ValueError("new_name 不能为空")
+            raise ValueError("new_name must not be empty")
         new_name = new_name.strip()
 
         vm = self._find_vm(name_or_id)
@@ -492,7 +492,7 @@ class OvirtMCP(LinkNameMixin):
         if old_name == new_name:
             return {
                 "success": True,
-                "message": f"虚拟机 {old_name} 名称未变",
+                "message": f"VM {old_name} name unchanged",
                 "vm_id": vm["id"],
                 "old_name": old_name,
                 "new_name": new_name,
@@ -500,10 +500,10 @@ class OvirtMCP(LinkNameMixin):
 
         vms_service = self.connection.system_service().vms_service()
 
-        # 拒绝与其它 VM 重名（Engine 自身也会拒绝，但提前给出清晰错误）
+        # Reject a name already used by another VM (the engine would reject it too, but fail early with a clear error)
         existing = vms_service.list(search=f"name={_sanitize_search_value(new_name)}")
         if existing and existing[0].id != vm["id"]:
-            raise ValueError(f"虚拟机已存在: {new_name}")
+            raise ValueError(f"VM already exists: {new_name}")
 
         vm_service = vms_service.vm_service(vm["id"])
         current = vm_service.get()
@@ -514,38 +514,38 @@ class OvirtMCP(LinkNameMixin):
 
         return {
             "success": True,
-            "message": f"虚拟机 {old_name} 已重命名为 {new_name}",
+            "message": f"VM {old_name} renamed to {new_name}",
             "vm_id": vm["id"],
             "old_name": old_name,
             "new_name": new_name,
         }
 
     def update_vm_resources(self, name_or_id: str, memory_mb: int = None, cpu_cores: int = None) -> Dict[str, Any]:
-        """更新 VM 资源（热添加）"""
+        """Update VM resources (hot-plug)."""
         vm = self._find_vm(name_or_id)
         if not vm: raise ValueError(f"VM not found: {name_or_id}")
         
         vm_service = self.connection.system_service().vms_service().vm_service(vm["id"])
         
-        # 获取当前 VM
+        # Get current VM
         current = vm_service.get()
         
-        # 更新内存
+        # Update memory
         if memory_mb:
             current.memory = memory_mb * 1024 * 1024
         
-        # 更新 CPU
+        # Update CPU
         if cpu_cores:
             current.cpu.topology.cores = cpu_cores
         
         vm_service.update(current)
         
-        return {"success": True, "message": f"虚拟机 {vm['name']} 资源已更新"}
+        return {"success": True, "message": f"VM {vm['name']} resources updated"}
     
-    # ==================== 快照管理 ====================
+    # ==================== Snapshot management ====================
     
     def list_snapshots(self, name_or_id: str) -> List[SnapshotInfo]:
-        """列出 VM 快照"""
+        """List VM snapshots."""
         vm = self._find_vm(name_or_id)
         if not vm: raise ValueError(f"VM not found: {name_or_id}")
         
@@ -566,7 +566,7 @@ class OvirtMCP(LinkNameMixin):
         ]
     
     def create_snapshot(self, name_or_id: str, description: str = "", persist_memory: bool = False) -> Dict[str, Any]:
-        """创建快照"""
+        """Create a snapshot."""
         vm = self._find_vm(name_or_id)
         if not vm: raise ValueError(f"VM not found: {name_or_id}")
         
@@ -582,17 +582,17 @@ class OvirtMCP(LinkNameMixin):
         
         return {
             "success": True,
-            "message": f"快照创建中: {snapshot_name}",
+            "message": f"Creating snapshot: {snapshot_name}",
             "vm_id": vm["id"],
             "snapshot_name": snapshot_name
         }
     
     def restore_snapshot(self, name_or_id: str, snapshot_id: str) -> Dict[str, Any]:
-        """恢复快照"""
+        """Restore a snapshot."""
         vm = self._find_vm(name_or_id)
         if not vm: raise ValueError(f"VM not found: {name_or_id}")
         
-        # 停止 VM
+        # Stop VM
         try:
             vm_service = self.connection.system_service().vms_service().vm_service(vm["id"])
             current = vm_service.get()
@@ -602,36 +602,36 @@ class OvirtMCP(LinkNameMixin):
         except Exception as e:
             logger.debug(f"Failed to stop VM before snapshot restore: {e}")
         
-        # 恢复快照
+        # Restore snapshot
         snapshot_service = self.connection.system_service().vms_service().vm_service(vm["id"]).snapshots_service().snapshot_service(snapshot_id)
         snapshot_service.restore()
         
         return {
             "success": True,
-            "message": f"正在恢复到快照",
+            "message": f"Restoring to snapshot",
             "vm_id": vm["id"]
         }
     
     def delete_snapshot(self, name_or_id: str, snapshot_id: str) -> Dict[str, Any]:
-        """删除快照"""
+        """Delete a snapshot."""
         vm = self._find_vm(name_or_id)
         if not vm: raise ValueError(f"VM not found: {name_or_id}")
         
         snapshot_service = self.connection.system_service().vms_service().vm_service(vm["id"]).snapshots_service().snapshot_service(snapshot_id)
         snapshot_service.remove()
         
-        return {"success": True, "message": "快照已删除"}
+        return {"success": True, "message": "Snapshot deleted"}
     
-    # ==================== 备份管理 ====================
+    # ==================== Backup management ====================
     
     def create_backup(self, name_or_id: str, backup_type: str = "full", description: str = "") -> Dict[str, Any]:
         """
-        创建备份
+        Create a backup.
         
         Args:
-            name_or_id: VM 名称或 ID
-            backup_type: 备份类型 (full, incremental)
-            description: 备份描述
+            name_or_id: VM name or ID
+            backup_type: Backup type (full, incremental)
+            description: Backup description
         """
         vm = self._find_vm(name_or_id)
         if not vm:
@@ -640,21 +640,21 @@ class OvirtMCP(LinkNameMixin):
         self._ensure_connected()
         
         try:
-            # 尝试使用 oVirt 4.3+ 备份 API (需要企业版)
+            # Try the oVirt 4.3+ backup API (requires Enterprise)
             vm_service = self.connection.system_service().vms_service().vm_service(vm["id"])
             
-            # 检查是否支持备份 API
+            # Check whether the backup API is supported
             try:
                 backups_service = vm_service.backups_service()
             except AttributeError:
-                # 旧版本不支持备份 API，使用快照作为备选
+                # Older versions lack the backup API; fall back to snapshots
                 logger.info("Backup API not available, falling back to snapshot")
                 return self._stub_create_backup(vm, backup_type, description)
             
-            # 获取磁盘列表
+            # Get disk list
             disk_attachments = vm_service.disk_attachments_service().list()
             
-            # 创建备份
+            # Create backup
             import ovirtsdk4.types as types
             
             disks = [types.Disk(id=da.disk.id) for da in disk_attachments if da.disk]
@@ -668,7 +668,7 @@ class OvirtMCP(LinkNameMixin):
             
             return {
                 "success": True,
-                "message": f"备份任务已创建: {backup_type}",
+                "message": f"Backup task created: {backup_type}",
                 "vm_id": vm["id"],
                 "vm_name": vm["name"],
                 "backup_id": backup.id,
@@ -682,7 +682,7 @@ class OvirtMCP(LinkNameMixin):
             return self._stub_create_backup(vm, backup_type, description)
     
     def _stub_create_backup(self, vm: Dict, backup_type: str, description: str) -> Dict[str, Any]:
-        """备份的存根实现（用于 API 不可用时的回退）"""
+        """Stub backup implementation (fallback when the API is unavailable)."""
         import uuid
         backup_id = str(uuid.uuid4())
         
@@ -690,7 +690,7 @@ class OvirtMCP(LinkNameMixin):
         
         return {
             "success": True,
-            "message": f"备份任务已创建 (模拟): {backup_type}",
+            "message": f"Backup task created (simulated): {backup_type}",
             "vm_id": vm["id"],
             "vm_name": vm["name"],
             "backup_id": backup_id,
@@ -702,12 +702,12 @@ class OvirtMCP(LinkNameMixin):
     
     def restore_backup(self, name_or_id: str, backup_id: str, new_vm_name: str = None) -> Dict[str, Any]:
         """
-        从备份恢复
+        Restore from a backup.
         
         Args:
-            name_or_id: 源 VM 名称或 ID
-            backup_id: 备份 ID
-            new_vm_name: 新 VM 名称（可选，不提供则恢复到原 VM）
+            name_or_id: Source VM name or ID
+            backup_id: Backup ID
+            new_vm_name: New VM name (optional; restore into the original VM if omitted)
         """
         vm = self._find_vm(name_or_id)
         if not vm:
@@ -716,7 +716,7 @@ class OvirtMCP(LinkNameMixin):
         self._ensure_connected()
         
         try:
-            # 尝试使用 oVirt 4.3+ 备份恢复 API
+            # Try the oVirt 4.3+ backup restore API
             system_service = self.connection.system_service()
             vm_service = system_service.vms_service().vm_service(vm["id"])
             
@@ -727,16 +727,16 @@ class OvirtMCP(LinkNameMixin):
                 logger.info(f"Backup API not available, falling back to snapshot restore")
                 return self._stub_restore_backup(vm, backup_id, new_vm_name)
             
-            # 如果提供了新名称，创建新 VM
+            # If a new name was given, create a new VM
             if new_vm_name:
-                # 使用快照方式克隆 VM
+                # Clone the VM via snapshot
                 import ovirtsdk4.types as types
                 
-                # 获取备份的 checkpoint
+                # Get the backup checkpoint
                 checkpoint_id = backup.to_checkpoint_id if hasattr(backup, 'to_checkpoint_id') else None
                 
                 if checkpoint_id:
-                    # 从 checkpoint 创建新 VM
+                    # Create a new VM from the checkpoint
                     new_vm = system_service.vms_service().add(
                         types.Vm(
                             name=new_vm_name,
@@ -747,18 +747,18 @@ class OvirtMCP(LinkNameMixin):
                     
                     return {
                         "success": True,
-                        "message": f"正在从备份创建新 VM: {new_vm_name}",
+                        "message": f"Creating new VM from backup: {new_vm_name}",
                         "source_vm_id": vm["id"],
                         "new_vm_id": new_vm.id,
                         "new_vm_name": new_vm_name,
                         "backup_id": backup_id
                     }
             
-            # 恢复到原 VM (使用快照)
+            # Restore the original VM (using a snapshot)
             snapshots_service = vm_service.snapshots_service()
             snapshots = snapshots_service.list()
             
-            # 查找对应备份的快照
+            # Find the snapshot for this backup
             target_snapshot = None
             for snap in snapshots:
                 if backup_id in (snap.description or "") or snap.id == backup_id:
@@ -771,7 +771,7 @@ class OvirtMCP(LinkNameMixin):
                 
                 return {
                     "success": True,
-                    "message": f"正在恢复 VM 到备份状态",
+                    "message": f"Restoring VM to backup state",
                     "vm_id": vm["id"],
                     "vm_name": vm["name"],
                     "backup_id": backup_id,
@@ -785,12 +785,12 @@ class OvirtMCP(LinkNameMixin):
             return self._stub_restore_backup(vm, backup_id, new_vm_name)
     
     def _stub_restore_backup(self, vm: Dict, backup_id: str, new_vm_name: str = None) -> Dict[str, Any]:
-        """恢复备份的存根实现"""
+        """Stub restore implementation."""
         logger.info(f"Using stub restore implementation for VM {vm['name']}")
         
         return {
             "success": True,
-            "message": f"从备份 {backup_id} 恢复 (模拟)",
+            "message": f"Restored from backup {backup_id} (simulated)",
             "vm_id": vm["id"],
             "vm_name": vm["name"],
             "backup_id": backup_id,
@@ -799,12 +799,12 @@ class OvirtMCP(LinkNameMixin):
             "note": "Restore API requires oVirt 4.3+ Enterprise with backup infrastructure."
         }
     
-    # ==================== 磁盘管理 ====================
+    # ==================== Disk management ====================
     
 
     
     def attach_disk(self, name_or_id: str, disk_id: str) -> Dict[str, Any]:
-        """附加磁盘到 VM"""
+        """Attach a disk to a VM."""
         vm = self._find_vm(name_or_id)
         if not vm: raise ValueError(f"VM not found: {name_or_id}")
         
@@ -821,12 +821,12 @@ class OvirtMCP(LinkNameMixin):
             )
         )
         
-        return {"success": True, "message": f"磁盘已附加到 VM"}
+        return {"success": True, "message": f"Disk attached to VM"}
     
-    # ==================== 网络管理 ====================
+    # ==================== Network Management ====================
     
     def list_networks(self, cluster: str = None) -> List[Dict]:
-        """列出网络"""
+        """List networks."""
         self._ensure_connected()
         
         networks_service = self.connection.system_service().networks_service()
@@ -845,10 +845,10 @@ class OvirtMCP(LinkNameMixin):
             for n in networks
         ]
 
-    # ==================== 网络管理 (Network Management) ====================
+    # ==================== Network Management ====================
     
     def _find_network(self, name_or_id: str) -> Optional[Dict[str, Any]]:
-        """查找网络 by name or ID"""
+        """Find a network by name or ID."""
         try:
             net = self.connection.system_service().networks_service().network_service(name_or_id).get()
             return {"id": net.id, "name": net.name}
@@ -871,7 +871,7 @@ class OvirtMCP(LinkNameMixin):
         }
     
     def get_network(self, name_or_id: str) -> Optional[Dict[str, Any]]:
-        """获取网络详情"""
+        """Get network details."""
         self._ensure_connected()
         networks_service = self.connection.system_service().networks_service()
         # Try by ID first
@@ -888,7 +888,7 @@ class OvirtMCP(LinkNameMixin):
     def create_network(self, name: str, datacenter: str = None,
                        vlan_id: int = None, mtu: int = 1500,
                        description: str = "") -> Dict[str, Any]:
-        """创建逻辑网络"""
+        """Create a logical network."""
         self._ensure_connected()
         
         # Resolve datacenter
@@ -914,12 +914,12 @@ class OvirtMCP(LinkNameMixin):
             "name": name,
             "vlan_id": vlan_id,
             "mtu": mtu,
-            "message": f"网络 {name} 创建成功",
+            "message": f"Network {name} created successfully",
         }
     
     def update_network(self, name_or_id: str, vlan_id: int = None,
                        mtu: int = None, description: str = None) -> Dict[str, Any]:
-        """更新网络设置"""
+        """Update network settings."""
         self._ensure_connected()
         
         network = self._find_network(name_or_id)
@@ -940,11 +940,11 @@ class OvirtMCP(LinkNameMixin):
         return {
             "success": True,
             "network_id": network["id"],
-            "message": "网络已更新",
+            "message": "Network updated",
         }
     
     def delete_network(self, name_or_id: str, force: bool = False) -> Dict[str, Any]:
-        """删除逻辑网络"""
+        """Delete a logical network."""
         self._ensure_connected()
         network = self._find_network(name_or_id)
         if not network:
@@ -955,11 +955,11 @@ class OvirtMCP(LinkNameMixin):
             "success": True,
             "network_id": network["id"],
             "force": force,
-            "message": f"网络 {network['name']} 已删除",
+            "message": f"Network {network['name']} deleted",
         }
     
     def list_vnic_profiles(self, network_id: str = None) -> List[Dict]:
-        """列出虚拟网卡配置文件"""
+        """List VNIC profiles."""
         self._ensure_connected()
         profiles = self.connection.system_service().vnic_profiles_service().list()
         
@@ -981,12 +981,12 @@ class OvirtMCP(LinkNameMixin):
 
     
     def add_nic(self, name_or_id: str, nic_name: str, network: str) -> Dict[str, Any]:
-        """添加网卡"""
+        """Add a NIC."""
         vm = self._find_vm(name_or_id)
         if not vm: raise ValueError(f"VM not found: {name_or_id}")
         
         networks = self.connection.system_service().networks_service().list(search=f"name={_sanitize_search_value(network)}")
-        if not networks: raise ValueError(f"网络不存在: {network}")
+        if not networks: raise ValueError(f"Network not found: {network}")
         
         nics_service = self.connection.system_service().vms_service().vm_service(vm["id"]).nics_service()
         nics_service.add(
@@ -997,10 +997,10 @@ class OvirtMCP(LinkNameMixin):
             )
         )
         
-        return {"success": True, "message": f"网卡 {nic_name} 已添加到 VM"}
+        return {"success": True, "message": f"NIC {nic_name} added to VM"}
     
     def remove_nic(self, name_or_id: str, nic_name: str) -> Dict[str, Any]:
-        """移除网卡"""
+        """Remove a NIC."""
         vm = self._find_vm(name_or_id)
         if not vm: raise ValueError(f"VM not found: {name_or_id}")
         
@@ -1012,12 +1012,12 @@ class OvirtMCP(LinkNameMixin):
                 nics_service.nic_service(nic.id).remove()
                 break
         
-        return {"success": True, "message": f"网卡 {nic_name} 已移除"}
+        return {"success": True, "message": f"NIC {nic_name} removed"}
     
-    # ==================== 主机管理 ====================
+    # ==================== Host management ====================
     
     def list_hosts(self, cluster: str = None) -> List[Dict]:
-        """列出主机"""
+        """List hosts."""
         self._ensure_connected()
         
         hosts_service = self.connection.system_service().hosts_service()
@@ -1042,25 +1042,25 @@ class OvirtMCP(LinkNameMixin):
         return result
     
     def activate_host(self, name_or_id: str) -> Dict[str, Any]:
-        """激活主机"""
+        """Activate a host."""
         host = self._find_host(name_or_id)
         if not host: raise ValueError(f"Host not found: {name_or_id}")
         
         self.connection.system_service().hosts_service().host_service(host["id"]).activate()
         
-        return {"success": True, "message": f"主机 {host['name']} 激活中..."}
+        return {"success": True, "message": f"Activating host {host['name']}..."}
     
     def deactivate_host(self, name_or_id: str) -> Dict[str, Any]:
-        """维护主机"""
+        """Put a host into maintenance mode."""
         host = self._find_host(name_or_id)
         if not host: raise ValueError(f"Host not found: {name_or_id}")
         
         self.connection.system_service().hosts_service().host_service(host["id"]).deactivate()
         
-        return {"success": True, "message": f"主机 {host['name']} 进入维护模式..."}
+        return {"success": True, "message": f"Host {host['name']} entering maintenance mode..."}
     
     def get_host(self, name_or_id: str) -> Optional[Dict[str, Any]]:
-        """获取主机详情"""
+        """Get host details."""
         self._ensure_connected()
         
         hosts_service = self.connection.system_service().hosts_service()
@@ -1101,7 +1101,7 @@ class OvirtMCP(LinkNameMixin):
     
     def add_host(self, name: str, cluster: str, ip: str,
                 password: str = None, ssh_port: int = 22) -> Dict[str, Any]:
-        """添加主机到集群"""
+        """Add a host to a cluster."""
         self._ensure_connected()
         
         # Validate cluster exists
@@ -1109,7 +1109,7 @@ class OvirtMCP(LinkNameMixin):
             search=f"name={_sanitize_search_value(cluster)}"
         )
         if not clusters:
-            raise ValueError(f"集群不存在: {cluster}")
+            raise ValueError(f"Cluster not found: {cluster}")
         
         host = self.connection.system_service().hosts_service().add(
             sdk.types.Host(
@@ -1128,11 +1128,11 @@ class OvirtMCP(LinkNameMixin):
             "cluster": cluster,
             "ip": ip,
             "status": str(host.status.value) if host.status else "installing",
-            "message": f"主机 {name} 添加成功，正在安装"
+            "message": f"Host {name} added, installing"
         }
     
     def remove_host(self, name_or_id: str, force: bool = False) -> Dict[str, Any]:
-        """移除主机"""
+        """Remove a host."""
         host = self._find_host(name_or_id)
         if not host:
             raise ValueError(f"Host not found: {name_or_id}")
@@ -1146,7 +1146,7 @@ class OvirtMCP(LinkNameMixin):
                 host_service.deactivate()
                 self._wait_for_status(host["id"], "maintenance", "hosts")
             else:
-                raise ValueError("主机必须处于维护模式才能移除，或使用 force=True")
+                raise ValueError("Host must be in maintenance mode to be removed, or use force=True")
         
         host_service.remove(force=force)
         
@@ -1155,11 +1155,11 @@ class OvirtMCP(LinkNameMixin):
             "host_id": host["id"],
             "name": host["name"],
             "force": force,
-            "message": f"主机 {host['name']} 已移除"
+            "message": f"Host {host['name']} removed"
         }
     
     def get_host_stats(self, name_or_id: str) -> Dict[str, Any]:
-        """获取主机实时统计信息"""
+        """Get live host statistics."""
         self._ensure_connected()
         host = self._find_host(name_or_id)
         if not host:
@@ -1196,7 +1196,7 @@ class OvirtMCP(LinkNameMixin):
     
     def install_host(self, name_or_id: str, root_password: str = None,
                      force: bool = False) -> Dict[str, Any]:
-        """重新安装主机"""
+        """Reinstall a host."""
         host = self._find_host(name_or_id)
         if not host:
             raise ValueError(f"Host not found: {name_or_id}")
@@ -1206,7 +1206,7 @@ class OvirtMCP(LinkNameMixin):
         # Host must be in maintenance for reinstall
         current = host_service.get()
         if str(current.status.value) != "maintenance" and not force:
-            raise ValueError("主机必须处于维护模式才能重新安装")
+            raise ValueError("Host must be in maintenance mode to be reinstalled")
         
         host_service.install(
             sdk.types.Action(
@@ -1219,11 +1219,11 @@ class OvirtMCP(LinkNameMixin):
             "host_id": host["id"],
             "name": host["name"],
             "status": "installing",
-            "message": f"主机 {host['name']} 重新安装中"
+            "message": f"Reinstalling host {host['name']}"
         }
     
     def fence_host(self, name_or_id: str, action: str = "status") -> Dict[str, Any]:
-        """Fence 主机 (电源管理)"""
+        """Fence a host (power management)."""
         host = self._find_host(name_or_id)
         if not host:
             raise ValueError(f"Host not found: {name_or_id}")
@@ -1237,7 +1237,7 @@ class OvirtMCP(LinkNameMixin):
         
         fence_type = fence_type_map.get(action.lower())
         if not fence_type:
-            raise ValueError(f"无效的 fence 操作: {action}. 支持: status, start, stop, restart")
+            raise ValueError(f"Invalid fence action: {action}. Supported: status, start, stop, restart")
         
         host_service = self.connection.system_service().hosts_service().host_service(host["id"])
         result = host_service.fence(fence_type=fence_type)
@@ -1253,7 +1253,7 @@ class OvirtMCP(LinkNameMixin):
     
     def update_host_network(self, name_or_id: str, 
                            network_config: Dict = None) -> Dict[str, Any]:
-        """更新主机网络配置"""
+        """Update host network configuration."""
         host = self._find_host(name_or_id)
         if not host:
             raise ValueError(f"Host not found: {name_or_id}")
@@ -1267,11 +1267,11 @@ class OvirtMCP(LinkNameMixin):
             "success": True,
             "host_id": host["id"],
             "name": host["name"],
-            "message": "主机网络配置已提交"
+            "message": "Host network configuration committed"
         }
     
     def list_host_nics(self, name_or_id: str) -> List[Dict]:
-        """列出主机网卡"""
+        """List host NICs."""
         self._ensure_connected()
         host = self._find_host(name_or_id)
         if not host:
@@ -1293,7 +1293,7 @@ class OvirtMCP(LinkNameMixin):
             for nic in nics
         ]
 
-    # ==================== 高级主机管理 (Phase 4) ====================
+    # ==================== Advanced host management (Phase 4) ====================
     
     def upgrade_check_host(self, name_or_id: str) -> Dict[str, Any]:
         """Check if host has available upgrades"""
@@ -1618,10 +1618,10 @@ class OvirtMCP(LinkNameMixin):
         
         return results
 
-    # ==================== 集群管理 ====================
+    # ==================== Cluster management ====================
     
     def list_clusters(self) -> List[Dict]:
-        """列出集群"""
+        """List clusters."""
         self._ensure_connected()
         
         clusters = self.connection.system_service().clusters_service().list()
@@ -1637,10 +1637,10 @@ class OvirtMCP(LinkNameMixin):
             for c in clusters
         ]
     
-    # ==================== 存储管理 ====================
+    # ==================== Storage management ====================
     
     def list_storage_domains(self) -> List[Dict]:
-        """列出存储域"""
+        """List storage domains."""
         self._ensure_connected()
         
         storage = self.connection.system_service().storage_domains_service().list()
@@ -2028,7 +2028,7 @@ class OvirtMCP(LinkNameMixin):
             for vm in vms
         ]
 
-    # ==================== 磁盘管理 ====================
+    # ==================== Disk management ====================
 
     def list_disks(self, name_or_id: str = None, storage_domain: str = None) -> List[Dict]:
         """List all disks"""
@@ -2246,10 +2246,10 @@ class OvirtMCP(LinkNameMixin):
 
 
     
-    # ==================== 模板管理 ====================
+    # ==================== Template management ====================
     
     def list_templates(self, cluster: str = None) -> List[Dict]:
-        """列出模板"""
+        """List templates."""
         self._ensure_connected()
         
         templates = self.connection.system_service().templates_service().list()
@@ -2267,10 +2267,10 @@ class OvirtMCP(LinkNameMixin):
         
         return result
 
-    # ==================== 模板管理 (Template Management) ====================
+    # ==================== Template Management ====================
     
     def _find_template(self, name_or_id: str) -> Optional[Dict[str, Any]]:
-        """查找模板 by name or ID"""
+        """Find a template by name or ID."""
         try:
             tmpl = self.connection.system_service().templates_service().template_service(name_or_id).get()
             return {"id": tmpl.id, "name": tmpl.name}
@@ -2292,7 +2292,7 @@ class OvirtMCP(LinkNameMixin):
         }
     
     def get_template(self, name_or_id: str) -> Optional[Dict[str, Any]]:
-        """获取模板详情"""
+        """Get template details."""
         self._ensure_connected()
         templates_service = self.connection.system_service().templates_service()
         # Try by ID first
@@ -2308,7 +2308,7 @@ class OvirtMCP(LinkNameMixin):
     
     def create_template_from_vm(self, vm_id: str, template_name: str,
                                 description: str = "") -> Dict[str, Any]:
-        """从 VM 创建模板
+        """Create a template from a VM
         
         Uses templates_service().add() with vm reference.
         """
@@ -2332,11 +2332,11 @@ class OvirtMCP(LinkNameMixin):
             "name": template_name,
             "source_vm": vm["id"],
             "status": "creating",
-            "message": f"模板 {template_name} 创建中",
+            "message": f"Creating template {template_name}",
         }
     
     def clone_template(self, source_id: str, new_name: str) -> Dict[str, Any]:
-        """克隆模板
+        """Clone a template
         
         Creates a new template based on an existing one.
         """
@@ -2366,11 +2366,11 @@ class OvirtMCP(LinkNameMixin):
             "source_id": source["id"],
             "new_name": new_name,
             "status": "creating",
-            "message": "模板克隆中",
+            "message": "Cloning template",
         }
     
     def delete_template(self, name_or_id: str, force: bool = False) -> Dict[str, Any]:
-        """删除模板"""
+        """Delete a template."""
         self._ensure_connected()
         tmpl = self._find_template(name_or_id)
         if not tmpl:
@@ -2386,11 +2386,11 @@ class OvirtMCP(LinkNameMixin):
             "success": True,
             "template_id": tmpl["id"],
             "force": force,
-            "message": "模板已删除",
+            "message": "Template deleted",
         }
     
     def export_template(self, name_or_id: str, export_domain: str) -> Dict[str, Any]:
-        """导出模板到导出存储域
+        """Export a template to an export domain
         
         Uses template_service(id).export_() - note trailing underscore.
         """
@@ -2414,12 +2414,12 @@ class OvirtMCP(LinkNameMixin):
             "template_id": tmpl["id"],
             "export_domain": export_domain,
             "status": "exporting",
-            "message": "模板导出中",
+            "message": "Exporting template",
         }
     
     def import_template(self, name: str, import_domain: str,
                         cluster: str) -> Dict[str, Any]:
-        """从导出存储域导入模板
+        """Import a template from an export domain
         
         Finds the template in the export domain's templates_service,
         then calls template_service(id).import_() - note trailing underscore.
@@ -2462,14 +2462,14 @@ class OvirtMCP(LinkNameMixin):
             "import_domain": import_domain,
             "cluster": cluster,
             "status": "importing",
-            "message": "模板导入中",
+            "message": "Importing template",
         }
 
     
-    # ==================== 辅助方法 ====================
+    # ==================== Helper methods ====================
     
     def _find_vm(self, name_or_id: str) -> Optional[Dict[str, Any]]:
-        """查找 VM"""
+        """Find a VM."""
         try:
             vm = self.connection.system_service().vms_service().vm_service(name_or_id).get()
             return {"id": vm.id, "name": vm.name}
@@ -2480,7 +2480,7 @@ class OvirtMCP(LinkNameMixin):
         return {"id": vms[0].id, "name": vms[0].name} if vms else None
     
     def _find_host(self, name_or_id: str) -> Optional[Dict[str, Any]]:
-        """查找主机"""
+        """Find a host."""
         try:
             host = self.connection.system_service().hosts_service().host_service(name_or_id).get()
             return {"id": host.id, "name": host.name}
@@ -2491,7 +2491,7 @@ class OvirtMCP(LinkNameMixin):
         return {"id": hosts[0].id, "name": hosts[0].name} if hosts else None
     
     def _find_storage(self, name_or_id: str) -> Optional[Dict[str, Any]]:
-        """查找存储域"""
+        """Find a storage domain."""
         try:
             sd = self.connection.system_service().storage_domains_service().storage_domain_service(name_or_id).get()
             return {"id": sd.id, "name": sd.name}
@@ -2502,7 +2502,7 @@ class OvirtMCP(LinkNameMixin):
         return {"id": sds[0].id, "name": sds[0].name} if sds else None
     
     def _wait_for_status(self, obj_id: str, target_status: str, service_type: str, timeout: int = 300) -> None:
-        """等待状态变化"""
+        """Wait for a status change."""
         import time
         start = time.time()
         
@@ -2519,10 +2519,10 @@ class OvirtMCP(LinkNameMixin):
             
             time.sleep(2)
         
-        raise OvirtTimeoutError(f"等待状态 {target_status} 超时")
+        raise OvirtTimeoutError(f"Timed out waiting for status {target_status}")
     
     def get_vm_stats(self, name_or_id: str) -> Dict[str, Any]:
-        """获取 VM 实时统计信息"""
+        """Get live VM statistics."""
         vm = self._find_vm(name_or_id)
         if not vm: raise ValueError(f"VM not found: {name_or_id}")
         

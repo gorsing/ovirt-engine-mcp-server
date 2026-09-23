@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tests for DiskExtendedMCP class - 磁盘扩展模块测试."""
+"""Tests for DiskExtendedMCP class - disk extension module tests."""
 from types import SimpleNamespace
 
 import pytest
@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 
 
 def _create_mock_disk(disk_id="disk-123", name="disk1", status="ok", size=53687091200):
-    """创建 mock Disk 对象"""
+    """Create a mock Disk object"""
     mock_disk = MagicMock()
     mock_disk.id = disk_id
     mock_disk.name = name
@@ -32,7 +32,7 @@ def _create_mock_disk(disk_id="disk-123", name="disk1", status="ok", size=536870
 
 
 def _create_mock_vm(vm_id="vm-123", name="test-vm"):
-    """创建 mock VM 对象"""
+    """Create a mock VM object"""
     mock_vm = MagicMock()
     mock_vm.id = vm_id
     mock_vm.name = name
@@ -40,7 +40,7 @@ def _create_mock_vm(vm_id="vm-123", name="test-vm"):
 
 
 class TestDiskExtendedMCPGetDisk:
-    """测试 get_disk 方法"""
+    """Tests for the get_disk method"""
 
     def test_get_disk_storage_domain_from_storage_domains(self):
         """Live disks leave ``storage_domain`` empty and fill the plural ref."""
@@ -85,7 +85,7 @@ class TestDiskExtendedMCPGetDisk:
         assert result["attachments"] == []  # Disk.vms is None on this engine
 
     def test_get_disk_by_id(self):
-        """测试通过 ID 获取磁盘"""
+        """Test getting a disk by ID"""
         from ovirt_engine_mcp_server.mcp_disk_extended import DiskExtendedMCP
 
         mock_disk = _create_mock_disk()
@@ -114,7 +114,7 @@ class TestDiskExtendedMCPGetDisk:
         assert result["provisioned_size_gb"] == 50
 
     def test_get_disk_not_found(self):
-        """测试磁盘不存在"""
+        """Test disk not found"""
         from ovirt_engine_mcp_server.mcp_disk_extended import DiskExtendedMCP
 
         mock_ovirt = MagicMock()
@@ -133,10 +133,10 @@ class TestDiskExtendedMCPGetDisk:
 
 
 class TestDiskExtendedMCPDeleteDisk:
-    """测试 delete_disk 方法"""
+    """Tests for the delete_disk method"""
 
     def test_delete_disk_success(self):
-        """测试删除磁盘成功"""
+        """Test successful disk deletion"""
         from ovirt_engine_mcp_server.mcp_disk_extended import DiskExtendedMCP
 
         mock_disk = _create_mock_disk()
@@ -145,16 +145,16 @@ class TestDiskExtendedMCPDeleteDisk:
         mock_ovirt = MagicMock()
         mock_ovirt.connected = True
 
-        # 创建服务链 mock
+        # Create service chain mock
         system_service = mock_ovirt.connection.system_service.return_value
         disks_service = system_service.disks_service.return_value
 
-        # 设置 disk_service 返回正确的 mock
+        # Make disk_service return the correct mock
         disk_service_mock = disks_service.disk_service.return_value
         disk_service_mock.get.return_value = mock_disk
         disk_service_mock.remove.return_value = None
 
-        # 按名称搜索返回空（使用ID查找）
+        # Search by name returns empty (lookup by ID)
         disks_service.list.return_value = []
 
         disk_mcp = DiskExtendedMCP(mock_ovirt)
@@ -163,7 +163,7 @@ class TestDiskExtendedMCPDeleteDisk:
         assert result["success"] is True
 
     def test_delete_disk_not_found(self):
-        """测试删除不存在的磁盘"""
+        """Test deleting a nonexistent disk"""
         from ovirt_engine_mcp_server.mcp_disk_extended import DiskExtendedMCP
 
         mock_ovirt = MagicMock()
@@ -177,11 +177,11 @@ class TestDiskExtendedMCPDeleteDisk:
 
         disk_mcp = DiskExtendedMCP(mock_ovirt)
 
-        with pytest.raises(ValueError, match="不存在"):
+        with pytest.raises(ValueError, match="not found"):
             disk_mcp.delete_disk("nonexistent")
 
     def test_delete_disk_status_not_ok(self):
-        """测试磁盘状态异常时删除"""
+        """Test deletion when disk status is not ok"""
         from ovirt_engine_mcp_server.mcp_disk_extended import DiskExtendedMCP
 
         mock_disk = _create_mock_disk(status="locked")
@@ -197,15 +197,15 @@ class TestDiskExtendedMCPDeleteDisk:
 
         disk_mcp = DiskExtendedMCP(mock_ovirt)
 
-        with pytest.raises(RuntimeError, match="状态异常"):
+        with pytest.raises(RuntimeError, match="status not ok"):
             disk_mcp.delete_disk("disk-123")
 
 
 class TestDiskExtendedMCPResizeDisk:
-    """测试 resize_disk 方法"""
+    """Tests for the resize_disk method"""
 
     def test_resize_disk_success(self):
-        """测试调整磁盘大小成功"""
+        """Test successful disk resize"""
         from ovirt_engine_mcp_server.mcp_disk_extended import DiskExtendedMCP
 
         mock_disk = _create_mock_disk()
@@ -214,16 +214,16 @@ class TestDiskExtendedMCPResizeDisk:
         mock_ovirt = MagicMock()
         mock_ovirt.connected = True
 
-        # 创建服务链 mock
+        # Create service chain mock
         system_service = mock_ovirt.connection.system_service.return_value
         disks_service = system_service.disks_service.return_value
 
-        # 设置 disk_service 返回正确的 mock
+        # Make disk_service return the correct mock
         disk_service_mock = disks_service.disk_service.return_value
         disk_service_mock.get.return_value = mock_disk
         disk_service_mock.update.return_value = None
 
-        # 按名称搜索返回空（使用ID查找）
+        # Search by name returns empty (lookup by ID)
         disks_service.list.return_value = []
 
         disk_mcp = DiskExtendedMCP(mock_ovirt)
@@ -234,7 +234,7 @@ class TestDiskExtendedMCPResizeDisk:
         assert result["new_size_gb"] == 100
 
     def test_resize_disk_invalid_size(self):
-        """测试无效的磁盘大小"""
+        """Test invalid disk size"""
         from ovirt_engine_mcp_server.mcp_disk_extended import DiskExtendedMCP
 
         mock_ovirt = MagicMock()
@@ -242,11 +242,11 @@ class TestDiskExtendedMCPResizeDisk:
 
         disk_mcp = DiskExtendedMCP(mock_ovirt)
 
-        with pytest.raises(ValueError, match="必须大于 0"):
+        with pytest.raises(ValueError, match="must be greater than 0"):
             disk_mcp.resize_disk("disk-123", 0)
 
     def test_resize_disk_shrink_not_allowed(self):
-        """测试不允许缩小磁盘"""
+        """Test that shrinking a disk is not allowed"""
         from ovirt_engine_mcp_server.mcp_disk_extended import DiskExtendedMCP
 
         mock_disk = _create_mock_disk()
@@ -262,15 +262,15 @@ class TestDiskExtendedMCPResizeDisk:
 
         disk_mcp = DiskExtendedMCP(mock_ovirt)
 
-        with pytest.raises(ValueError, match="不能缩小磁盘"):
-            disk_mcp.resize_disk("disk-123", 10)  # 当前 50GB，请求缩小到 10GB
+        with pytest.raises(ValueError, match="Cannot shrink disk"):
+            disk_mcp.resize_disk("disk-123", 10)  # current 50GB, shrink to 10GB
 
 
 class TestDiskExtendedMCPDetachDisk:
-    """测试 detach_disk 方法"""
+    """Tests for the detach_disk method"""
 
     def test_detach_disk_success(self):
-        """测试分离磁盘成功"""
+        """Test successful disk detach"""
         from ovirt_engine_mcp_server.mcp_disk_extended import DiskExtendedMCP
 
         mock_disk = _create_mock_disk()
@@ -315,10 +315,10 @@ class TestDiskExtendedMCPDetachDisk:
 
 
 class TestDiskExtendedMCPMoveDisk:
-    """测试 move_disk 方法"""
+    """Tests for the move_disk method"""
 
     def test_move_disk_success(self):
-        """测试移动磁盘成功"""
+        """Test successful disk move"""
         from ovirt_engine_mcp_server.mcp_disk_extended import DiskExtendedMCP
 
         mock_disk = _create_mock_disk()
@@ -346,7 +346,7 @@ class TestDiskExtendedMCPMoveDisk:
         assert result["success"] is True
 
     def test_move_disk_storage_not_found(self):
-        """测试目标存储域不存在"""
+        """Test target storage domain not found"""
         from ovirt_engine_mcp_server.mcp_disk_extended import DiskExtendedMCP
 
         mock_disk = _create_mock_disk()
@@ -368,15 +368,15 @@ class TestDiskExtendedMCPMoveDisk:
 
         disk_mcp = DiskExtendedMCP(mock_ovirt)
 
-        with pytest.raises(ValueError, match="存储域不存在"):
+        with pytest.raises(ValueError, match="Storage domain not found"):
             disk_mcp.move_disk("disk-123", "nonexistent")
 
 
 class TestDiskExtendedMCPGetStats:
-    """测试 get_disk_stats 方法"""
+    """Tests for the get_disk_stats method"""
 
     def test_get_disk_stats_success(self):
-        """测试获取磁盘统计信息成功"""
+        """Test successful disk stats retrieval"""
         from ovirt_engine_mcp_server.mcp_disk_extended import DiskExtendedMCP
 
         mock_disk = _create_mock_disk()
@@ -403,10 +403,10 @@ class TestDiskExtendedMCPGetStats:
 
 
 class TestDiskExtendedMCPTools:
-    """测试 MCP_TOOLS 注册表"""
+    """Tests for the MCP_TOOLS registry"""
 
     def test_mcp_tools_defined(self):
-        """测试 MCP 工具注册表已定义"""
+        """Test that the MCP tool registry is defined"""
         from ovirt_engine_mcp_server.mcp_disk_extended import MCP_TOOLS
 
         expected_tools = [

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-oVirt MCP Server - 磁盘扩展模块
-提供磁盘详情、删除、调整大小和分离操作
+oVirt MCP Server - disk extension module
+Provides disk details, deletion, resize, and detach operations
 """
 from typing import Dict, List, Any, Optional
 import logging
@@ -19,19 +19,19 @@ logger = logging.getLogger(__name__)
 
 
 class DiskExtendedMCP(BaseMCP):
-    """磁盘扩展管理 MCP"""
+    """Disk extension management MCP"""
 
     def __init__(self, ovirt_mcp):
         super().__init__(ovirt_mcp)
 
     @require_connection
     def get_disk(self, name_or_id: str) -> Optional[Dict]:
-        """获取磁盘详情"""
+        """Get disk details"""
         disk = self._find_disk(name_or_id)
         if not disk:
             return None
 
-        # 获取磁盘附加信息
+        # Get disk attachment info
         # oVirt has no system-level disk_attachments_service, and
         # ``Disk.vms`` is what tells us where the disk is attached (it comes
         # back empty on some engines — then we simply report no attachments).
@@ -46,7 +46,7 @@ class DiskExtendedMCP(BaseMCP):
                     .list()
                 )
             except Exception as e:
-                logger.debug(f"获取 VM {vm_ref.id} 的磁盘附件失败: {e}")
+                logger.debug(f"Failed to get disk attachments for VM {vm_ref.id}: {e}")
                 continue
             for att in vm_attachments:
                 if not att.disk or att.disk.id != disk.id:
@@ -81,48 +81,48 @@ class DiskExtendedMCP(BaseMCP):
             "wipe_after_delete": disk.wipe_after_delete if hasattr(disk, 'wipe_after_delete') else False,
             "propagate_errors": disk.propagate_errors if hasattr(disk, 'propagate_errors') else False,
             "qcow_version": str(disk.qcow_version.value) if hasattr(disk, 'qcow_version') and disk.qcow_version else "",
-            "attachments": attachments[:10],  # 限制数量
+            "attachments": attachments[:10],  # Limit the count
         }
 
     @require_connection
     def delete_disk(self, name_or_id: str, force: bool = False) -> Dict[str, Any]:
-        """删除磁盘"""
+        """Delete a disk"""
         disk = self._find_disk(name_or_id)
         if not disk:
-            raise ValueError(f"磁盘不存在: {name_or_id}")
+            raise ValueError(f"Disk not found: {name_or_id}")
 
-        # 检查磁盘状态
+        # Check the disk status
         if disk.status and disk.status.value != "ok" and not force:
-            raise RuntimeError(f"磁盘状态异常: {disk.status.value}，使用 force=True 强制删除")
+            raise RuntimeError(f"Disk status not ok: {disk.status.value}, use force=True to force deletion")
 
         disk_service = self.connection.system_service().disks_service().disk_service(disk.id)
 
         try:
             disk_service.remove()
-            return {"success": True, "message": f"磁盘 {disk.name} 已删除"}
+            return {"success": True, "message": f"Disk {disk.name} deleted"}
         except Exception as e:
-            raise RuntimeError(f"删除磁盘失败: {e}")
+            raise RuntimeError(f"Failed to delete disk: {e}")
 
     @require_connection
     def resize_disk(self, name_or_id: str, new_size_gb: int) -> Dict[str, Any]:
-        """调整磁盘大小"""
+        """Resize a disk"""
         if new_size_gb <= 0:
-            raise ValueError("磁盘大小必须大于 0")
+            raise ValueError("Disk size must be greater than 0")
 
         disk = self._find_disk(name_or_id)
         if not disk:
-            raise ValueError(f"磁盘不存在: {name_or_id}")
+            raise ValueError(f"Disk not found: {name_or_id}")
 
         current_size_gb = int((disk.provisioned_size or 0) / (1024**3))
 
-        # 只能扩容，不能缩容
+        # Expand only; shrinking is not allowed
         if new_size_gb < current_size_gb:
-            raise ValueError(f"不能缩小磁盘: 当前 {current_size_gb}GB，请求 {new_size_gb}GB")
+            raise ValueError(f"Cannot shrink disk: current {current_size_gb}GB, requested {new_size_gb}GB")
 
         disk_service = self.connection.system_service().disks_service().disk_service(disk.id)
 
         try:
-            # 更新磁盘大小
+            # Update the disk size
             updated_disk = sdk.types.Disk(
                 id=disk.id,
                 provisioned_size=new_size_gb * 1024**3,
@@ -131,31 +131,31 @@ class DiskExtendedMCP(BaseMCP):
 
             return {
                 "success": True,
-                "message": f"磁盘 {disk.name} 大小已从 {current_size_gb}GB 调整为 {new_size_gb}GB",
+                "message": f"Disk {disk.name} size changed from {current_size_gb}GB to {new_size_gb}GB",
                 "old_size_gb": current_size_gb,
                 "new_size_gb": new_size_gb,
             }
         except Exception as e:
-            raise RuntimeError(f"调整磁盘大小失败: {e}")
+            raise RuntimeError(f"Failed to resize disk: {e}")
 
     @require_connection
     def detach_disk(self, name_or_id: str, vm_name_or_id: str) -> Dict[str, Any]:
-        """从虚拟机分离磁盘"""
+        """Detach a disk from a VM"""
         disk = self._find_disk(name_or_id)
         if not disk:
-            raise ValueError(f"磁盘不存在: {name_or_id}")
+            raise ValueError(f"Disk not found: {name_or_id}")
 
         vm = self._find_vm(vm_name_or_id)
         if not vm:
-            raise ValueError(f"虚拟机不存在: {vm_name_or_id}")
+            raise ValueError(f"VM not found: {vm_name_or_id}")
 
         try:
-            # 获取 VM 的磁盘附件
+            # Get the VM's disk attachments
             vm_service = self.connection.system_service().vms_service().vm_service(vm.id)
             attachments_service = vm_service.disk_attachments_service()
             attachments = attachments_service.list()
 
-            # 找到对应的附件
+            # Find the matching attachment
             attachment_id = None
             for att in attachments:
                 if att.disk and att.disk.id == disk.id:
@@ -163,56 +163,56 @@ class DiskExtendedMCP(BaseMCP):
                     break
 
             if not attachment_id:
-                raise ValueError(f"磁盘 {disk.name} 未附加到虚拟机 {vm.name}")
+                raise ValueError(f"Disk {disk.name} is not attached to VM {vm.name}")
 
-            # 分离磁盘
+            # Detach the disk
             attachment_service = attachments_service.attachment_service(attachment_id)
             attachment_service.remove()
 
             return {
                 "success": True,
-                "message": f"磁盘 {disk.name} 已从虚拟机 {vm.name} 分离",
+                "message": f"Disk {disk.name} detached from VM {vm.name}",
             }
         except ValueError:
             raise
         except Exception as e:
-            raise RuntimeError(f"分离磁盘失败: {e}")
+            raise RuntimeError(f"Failed to detach disk: {e}")
 
     @require_connection
     def move_disk(self, name_or_id: str, target_storage_domain: str) -> Dict[str, Any]:
-        """移动磁盘到另一个存储域"""
+        """Move a disk to another storage domain"""
         disk = self._find_disk(name_or_id)
         if not disk:
-            raise ValueError(f"磁盘不存在: {name_or_id}")
+            raise ValueError(f"Disk not found: {name_or_id}")
 
-        # 查找目标存储域
+        # Find the target storage domain
         sds = self.connection.system_service().storage_domains_service().list(
             search=f"name={_sanitize_search_value(target_storage_domain)}"
         )
         if not sds:
-            raise ValueError(f"存储域不存在: {target_storage_domain}")
+            raise ValueError(f"Storage domain not found: {target_storage_domain}")
 
         disk_service = self.connection.system_service().disks_service().disk_service(disk.id)
 
         try:
-            # 执行移动操作
+            # Perform the move
             disk_service.move(
                 storage_domain=sdk.types.StorageDomain(id=sds[0].id)
             )
 
             return {
                 "success": True,
-                "message": f"磁盘 {disk.name} 正在移动到存储域 {target_storage_domain}",
+                "message": f"Disk {disk.name} is moving to storage domain {target_storage_domain}",
             }
         except Exception as e:
-            raise RuntimeError(f"移动磁盘失败: {e}")
+            raise RuntimeError(f"Failed to move disk: {e}")
 
     @require_connection
     def get_disk_stats(self, name_or_id: str) -> Dict[str, Any]:
-        """获取磁盘统计信息"""
+        """Get disk statistics"""
         disk = self._find_disk(name_or_id)
         if not disk:
-            raise ValueError(f"磁盘不存在: {name_or_id}")
+            raise ValueError(f"Disk not found: {name_or_id}")
 
         provisioned = disk.provisioned_size or 0
         actual = disk.actual_size or 0
@@ -232,21 +232,21 @@ class DiskExtendedMCP(BaseMCP):
     def update_disk(self, name_or_id: str, new_name: str = None,
                    description: str = None, shareable: bool = None,
                    wipe_after_delete: bool = None) -> Dict[str, Any]:
-        """更新磁盘配置
+        """Update disk configuration
 
         Args:
-            name_or_id: 磁盘名称或 ID
-            new_name: 新名称
-            description: 新描述
-            shareable: 是否可共享
-            wipe_after_delete: 删除后擦除
+            name_or_id: Disk name or ID
+            new_name: New name
+            description: New description
+            shareable: Whether the disk can be shared
+            wipe_after_delete: Wipe after delete
 
         Returns:
-            更新结果
+            Update result
         """
         disk = self._find_disk(name_or_id)
         if not disk:
-            raise ValueError(f"磁盘不存在: {name_or_id}")
+            raise ValueError(f"Disk not found: {name_or_id}")
 
         disk_service = self.connection.system_service().disks_service().disk_service(disk.id)
 
@@ -261,27 +261,27 @@ class DiskExtendedMCP(BaseMCP):
 
         try:
             disk_service.update(disk)
-            return {"success": True, "message": f"磁盘配置已更新"}
+            return {"success": True, "message": f"Disk configuration updated"}
         except Exception as e:
-            raise RuntimeError(f"更新磁盘失败: {e}")
+            raise RuntimeError(f"Failed to update disk: {e}")
 
     @require_connection
     def sparsify_disk(self, name_or_id: str) -> Dict[str, Any]:
-        """精简磁盘（消除空白块）
+        """Sparsify a disk (reclaim blank blocks)
 
         Args:
-            name_or_id: 磁盘名称或 ID
+            name_or_id: Disk name or ID
 
         Returns:
-            操作结果
+            Operation result
         """
         disk = self._find_disk(name_or_id)
         if not disk:
-            raise ValueError(f"磁盘不存在: {name_or_id}")
+            raise ValueError(f"Disk not found: {name_or_id}")
 
-        # 检查磁盘格式
+        # Check the disk format
         if disk.format and disk.format.value != "cow":
-            raise ValueError("只有 COW 格式的磁盘支持精简操作")
+            raise ValueError("Only COW format disks support sparsify")
 
         disk_service = self.connection.system_service().disks_service().disk_service(disk.id)
 
@@ -289,37 +289,37 @@ class DiskExtendedMCP(BaseMCP):
             disk_service.sparsify()
             return {
                 "success": True,
-                "message": f"磁盘 {disk.name} 精简任务已启动",
+                "message": f"Sparsify task for disk {disk.name} started",
                 "disk_id": disk.id,
             }
         except Exception as e:
-            raise RuntimeError(f"精简磁盘失败: {e}")
+            raise RuntimeError(f"Failed to sparsify disk: {e}")
 
     @require_connection
     def export_disk(self, name_or_id: str, export_domain: str) -> Dict[str, Any]:
-        """导出磁盘到导出域
+        """Export a disk to an export domain
 
         Args:
-            name_or_id: 磁盘名称或 ID
-            export_domain: 导出域名称
+            name_or_id: Disk name or ID
+            export_domain: Export domain name
 
         Returns:
-            导出结果
+            Export result
         """
         disk = self._find_disk(name_or_id)
         if not disk:
-            raise ValueError(f"磁盘不存在: {name_or_id}")
+            raise ValueError(f"Disk not found: {name_or_id}")
 
-        # 查找导出域
+        # Find the export domain
         sds = self.connection.system_service().storage_domains_service().list(
             search=f"name={_sanitize_search_value(export_domain)}"
         )
         if not sds:
-            raise ValueError(f"存储域不存在: {export_domain}")
+            raise ValueError(f"Storage domain not found: {export_domain}")
 
-        # 检查是否为导出域
+        # Check that it is an export domain
         if sds[0].type and sds[0].type.value != "export":
-            raise ValueError(f"存储域 {export_domain} 不是导出域")
+            raise ValueError(f"Storage domain {export_domain} is not an export domain")
 
         disk_service = self.connection.system_service().disks_service().disk_service(disk.id)
 
@@ -329,25 +329,25 @@ class DiskExtendedMCP(BaseMCP):
             )
             return {
                 "success": True,
-                "message": f"磁盘 {disk.name} 导出任务已启动",
+                "message": f"Export task for disk {disk.name} started",
                 "disk_id": disk.id,
                 "export_domain": export_domain,
             }
         except Exception as e:
-            raise RuntimeError(f"导出磁盘失败: {e}")
+            raise RuntimeError(f"Failed to export disk: {e}")
 
 
-# MCP 工具注册表
+# MCP tool registry
 MCP_TOOLS = {
-    "disk_get": {"method": "get_disk", "description": "获取磁盘详情"},
-    "disk_delete": {"method": "delete_disk", "description": "删除磁盘"},
-    "disk_resize": {"method": "resize_disk", "description": "调整磁盘大小"},
-    "disk_detach": {"method": "detach_disk", "description": "从虚拟机分离磁盘"},
-    "disk_move": {"method": "move_disk", "description": "移动磁盘到另一个存储域"},
-    "disk_stats": {"method": "get_disk_stats", "description": "获取磁盘统计信息"},
+    "disk_get": {"method": "get_disk", "description": "Get disk details"},
+    "disk_delete": {"method": "delete_disk", "description": "Delete a disk"},
+    "disk_resize": {"method": "resize_disk", "description": "Resize a disk"},
+    "disk_detach": {"method": "detach_disk", "description": "Detach a disk from a VM"},
+    "disk_move": {"method": "move_disk", "description": "Move a disk to another storage domain"},
+    "disk_stats": {"method": "get_disk_stats", "description": "Get disk statistics"},
 
-    # 新增工具
-    "disk_update": {"method": "update_disk", "description": "更新磁盘配置"},
-    "disk_sparsify": {"method": "sparsify_disk", "description": "精简磁盘（消除空白块）"},
-    "disk_export": {"method": "export_disk", "description": "导出磁盘到导出域"},
+    # New tools
+    "disk_update": {"method": "update_disk", "description": "Update disk configuration"},
+    "disk_sparsify": {"method": "sparsify_disk", "description": "Sparsify a disk (reclaim blank blocks)"},
+    "disk_export": {"method": "export_disk", "description": "Export a disk to an export domain"},
 }

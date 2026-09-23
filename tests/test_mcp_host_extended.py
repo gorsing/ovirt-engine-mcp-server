@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tests for HostExtendedMCP class - 主机扩展模块测试."""
+"""Tests for HostExtendedMCP class - host extension module tests.."""
 from types import SimpleNamespace
 
 import pytest
@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 
 
 def _create_mock_host(host_id="host-123", name="host1", status="up"):
-    """创建 mock Host 对象"""
+    """Create a mock Host object."""
     mock_host = MagicMock()
     mock_host.id = host_id
     mock_host.name = name
@@ -41,7 +41,7 @@ def _create_mock_host(host_id="host-123", name="host1", status="up"):
 
 
 def _create_mock_stat(stat_name, stat_value):
-    """创建 mock Stat 对象"""
+    """Create a mock Stat object."""
     mock_stat = MagicMock()
     mock_stat.name = stat_name
     mock_stat.values = [MagicMock()]
@@ -50,7 +50,7 @@ def _create_mock_stat(stat_name, stat_value):
 
 
 def _create_mock_device(device_id="dev-123", name="eth0"):
-    """创建 mock Device 对象"""
+    """Create a mock Device object."""
     mock_device = MagicMock()
     mock_device.id = device_id
     mock_device.name = name
@@ -65,10 +65,10 @@ def _create_mock_device(device_id="dev-123", name="eth0"):
 
 
 class TestHostExtendedMCPGetHost:
-    """测试 get_host 方法"""
+    """Tests for get_host method."""
 
     def test_get_host_by_id(self):
-        """测试通过 ID 获取主机"""
+        """Get host by ID."""
         from ovirt_engine_mcp_server.mcp_host_extended import HostExtendedMCP
 
         mock_host = _create_mock_host()
@@ -95,7 +95,7 @@ class TestHostExtendedMCPGetHost:
         assert result["status"] == "up"
 
     def test_get_host_not_found(self):
-        """测试主机不存在"""
+        """Host not found."""
         from ovirt_engine_mcp_server.mcp_host_extended import HostExtendedMCP
 
         mock_ovirt = MagicMock()
@@ -113,7 +113,7 @@ class TestHostExtendedMCPGetHost:
         assert result is None
 
     def test_get_host_with_nics(self):
-        """测试获取主机包含网卡信息"""
+        """Get host with NIC information."""
         from ovirt_engine_mcp_server.mcp_host_extended import HostExtendedMCP
 
         mock_host = _create_mock_host()
@@ -149,10 +149,10 @@ class TestHostExtendedMCPGetHost:
 
 
 class TestHostExtendedMCPAddHost:
-    """测试 add_host 方法"""
+    """Tests for add_host method."""
 
     def test_add_host_success(self):
-        """测试添加主机成功"""
+        """Add host successfully."""
         from ovirt_engine_mcp_server.mcp_host_extended import HostExtendedMCP
 
         mock_host = _create_mock_host()
@@ -166,7 +166,7 @@ class TestHostExtendedMCPAddHost:
         mock_clusters_service.list.return_value = [mock_cluster]
 
         mock_hosts_service = MagicMock()
-        mock_hosts_service.list.return_value = []  # 名称不冲突
+        mock_hosts_service.list.return_value = []  # no name conflict
         mock_hosts_service.add.return_value = mock_host
 
         mock_ovirt.connection.system_service.return_value.clusters_service.return_value = mock_clusters_service
@@ -184,7 +184,7 @@ class TestHostExtendedMCPAddHost:
         assert "host_id" in result
 
     def test_add_host_cluster_not_found(self):
-        """测试添加主机时集群不存在"""
+        """Add host when cluster does not exist."""
         from ovirt_engine_mcp_server.mcp_host_extended import HostExtendedMCP
 
         mock_ovirt = MagicMock()
@@ -197,11 +197,11 @@ class TestHostExtendedMCPAddHost:
 
         host_mcp = HostExtendedMCP(mock_ovirt)
 
-        with pytest.raises(ValueError, match="集群不存在"):
+        with pytest.raises(ValueError, match="Cluster not found"):
             host_mcp.add_host("new-host", "Nonexistent", "192.168.1.10")
 
     def test_add_host_already_exists(self):
-        """测试添加已存在的主机"""
+        """Add an already existing host."""
         from ovirt_engine_mcp_server.mcp_host_extended import HostExtendedMCP
 
         mock_host = _create_mock_host()
@@ -215,22 +215,22 @@ class TestHostExtendedMCPAddHost:
         mock_clusters_service.list.return_value = [mock_cluster]
 
         mock_hosts_service = MagicMock()
-        mock_hosts_service.list.return_value = [mock_host]  # 名称已存在
+        mock_hosts_service.list.return_value = [mock_host]  # name already exists
 
         mock_ovirt.connection.system_service.return_value.clusters_service.return_value = mock_clusters_service
         mock_ovirt.connection.system_service.return_value.hosts_service.return_value = mock_hosts_service
 
         host_mcp = HostExtendedMCP(mock_ovirt)
 
-        with pytest.raises(ValueError, match="已存在"):
+        with pytest.raises(ValueError, match="already exists"):
             host_mcp.add_host("host1", "Default", "192.168.1.10")
 
 
 class TestHostExtendedMCPRemoveHost:
-    """测试 remove_host 方法"""
+    """Tests for remove_host method."""
 
     def test_remove_host_success(self):
-        """测试移除主机成功"""
+        """Remove host successfully."""
         from ovirt_engine_mcp_server.mcp_host_extended import HostExtendedMCP
 
         mock_host = _create_mock_host()
@@ -246,7 +246,7 @@ class TestHostExtendedMCPRemoveHost:
 
         mock_ovirt.connection.system_service.return_value.hosts_service.return_value = mock_hosts_service
 
-        # 需要重新设置 mock_host_service
+        # re-set mock_host_service
         mock_ovirt.connection.system_service.return_value.hosts_service.return_value.host_service.return_value = mock_host_service
         mock_ovirt.connection.system_service.return_value.hosts_service.return_value.list.return_value = []
 
@@ -256,7 +256,7 @@ class TestHostExtendedMCPRemoveHost:
         assert result["success"] is True
 
     def test_remove_host_not_found(self):
-        """测试移除不存在的主机"""
+        """Remove a nonexistent host."""
         from ovirt_engine_mcp_server.mcp_host_extended import HostExtendedMCP
 
         mock_ovirt = MagicMock()
@@ -270,15 +270,15 @@ class TestHostExtendedMCPRemoveHost:
 
         host_mcp = HostExtendedMCP(mock_ovirt)
 
-        with pytest.raises(ValueError, match="不存在"):
+        with pytest.raises(ValueError, match="Host not found"):
             host_mcp.remove_host("nonexistent")
 
 
 class TestHostExtendedMCPGetHostStats:
-    """测试 get_host_stats 方法"""
+    """Tests for get_host_stats method."""
 
     def test_get_host_stats_success(self):
-        """测试获取主机统计信息成功"""
+        """Get host statistics successfully."""
         from ovirt_engine_mcp_server.mcp_host_extended import HostExtendedMCP
 
         mock_host = _create_mock_host()
@@ -313,10 +313,10 @@ class TestHostExtendedMCPGetHostStats:
 
 
 class TestHostExtendedMCPGetHostDevices:
-    """测试 get_host_devices 方法"""
+    """Tests for get_host_devices method."""
 
     def test_get_host_devices_success(self):
-        """测试获取主机设备列表成功"""
+        """Get host devices successfully."""
         from ovirt_engine_mcp_server.mcp_host_extended import HostExtendedMCP
 
         mock_host = _create_mock_host()
@@ -342,7 +342,7 @@ class TestHostExtendedMCPGetHostDevices:
         assert result[0]["name"] == "device0"
 
     def test_get_host_devices_not_found(self):
-        """测试主机不存在时获取设备"""
+        """Get devices when host does not exist."""
         from ovirt_engine_mcp_server.mcp_host_extended import HostExtendedMCP
 
         mock_ovirt = MagicMock()
@@ -356,15 +356,15 @@ class TestHostExtendedMCPGetHostDevices:
 
         host_mcp = HostExtendedMCP(mock_ovirt)
 
-        with pytest.raises(ValueError, match="不存在"):
+        with pytest.raises(ValueError, match="Host not found"):
             host_mcp.get_host_devices("nonexistent")
 
 
 class TestHostExtendedMCPTools:
-    """测试 MCP_TOOLS 注册表"""
+    """Tests for MCP_TOOLS registry."""
 
     def test_mcp_tools_defined(self):
-        """测试 MCP 工具注册表已定义"""
+        """MCP tool registry is defined."""
         from ovirt_engine_mcp_server.mcp_host_extended import MCP_TOOLS
 
         expected_tools = [

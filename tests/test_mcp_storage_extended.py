@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tests for StorageExtendedMCP class - 存储扩展模块测试."""
+"""Tests for StorageExtendedMCP class - storage extension module tests.."""
 from types import SimpleNamespace
 
 import pytest
@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 
 
 def _create_mock_storage_domain(sd_id="sd-123", name="storage1", sd_type="data", status="active"):
-    """创建 mock StorageDomain 对象"""
+    """Create a mock StorageDomain object."""
     mock_sd = MagicMock()
     mock_sd.id = sd_id
     mock_sd.name = name
@@ -31,7 +31,7 @@ def _create_mock_storage_domain(sd_id="sd-123", name="storage1", sd_type="data",
 
 
 def _create_mock_datacenter(dc_id="dc-123", name="Default"):
-    """创建 mock DataCenter 对象"""
+    """Create a mock DataCenter object."""
     mock_dc = MagicMock()
     mock_dc.id = dc_id
     mock_dc.name = name
@@ -39,10 +39,10 @@ def _create_mock_datacenter(dc_id="dc-123", name="Default"):
 
 
 class TestStorageExtendedMCPGetStorageDomain:
-    """测试 get_storage_domain 方法"""
+    """Tests for get_storage_domain method."""
 
     def test_get_storage_domain_by_id(self):
-        """测试通过 ID 获取存储域"""
+        """Get storage domain by ID."""
         from ovirt_engine_mcp_server.mcp_storage_extended import StorageExtendedMCP
 
         mock_sd = _create_mock_storage_domain()
@@ -69,7 +69,7 @@ class TestStorageExtendedMCPGetStorageDomain:
         assert result["type"] == "data"
 
     def test_get_storage_domain_not_found(self):
-        """测试存储域不存在"""
+        """Storage domain not found."""
         from ovirt_engine_mcp_server.mcp_storage_extended import StorageExtendedMCP
 
         mock_ovirt = MagicMock()
@@ -87,7 +87,7 @@ class TestStorageExtendedMCPGetStorageDomain:
         assert result is None
 
     def test_get_storage_domain_with_files(self):
-        """测试获取存储域包含文件列表"""
+        """Get storage domain with file list."""
         from ovirt_engine_mcp_server.mcp_storage_extended import StorageExtendedMCP
 
         mock_sd = _create_mock_storage_domain()
@@ -117,10 +117,10 @@ class TestStorageExtendedMCPGetStorageDomain:
 
 
 class TestStorageExtendedMCPCreateStorageDomain:
-    """测试 create_storage_domain 方法"""
+    """Tests for create_storage_domain method."""
 
     def test_create_storage_domain_success(self):
-        """测试创建存储域成功"""
+        """Create storage domain successfully."""
         from ovirt_engine_mcp_server.mcp_storage_extended import StorageExtendedMCP
 
         mock_sd = _create_mock_storage_domain()
@@ -134,7 +134,7 @@ class TestStorageExtendedMCPCreateStorageDomain:
         mock_hosts_service.list.return_value = [mock_host]
 
         mock_sds_service = MagicMock()
-        mock_sds_service.list.return_value = []  # 名称不冲突
+        mock_sds_service.list.return_value = []  # no name conflict
         mock_sds_service.add.return_value = mock_sd
 
         mock_ovirt.connection.system_service.return_value.hosts_service.return_value = mock_hosts_service
@@ -152,7 +152,7 @@ class TestStorageExtendedMCPCreateStorageDomain:
         assert "storage_domain_id" in result
 
     def test_create_storage_domain_invalid_type(self):
-        """测试无效的存储类型"""
+        """Invalid storage type."""
         from ovirt_engine_mcp_server.mcp_storage_extended import StorageExtendedMCP
 
         mock_ovirt = MagicMock()
@@ -160,11 +160,11 @@ class TestStorageExtendedMCPCreateStorageDomain:
 
         storage_mcp = StorageExtendedMCP(mock_ovirt)
 
-        with pytest.raises(ValueError, match="无效的存储类型"):
+        with pytest.raises(ValueError, match="Invalid storage type"):
             storage_mcp.create_storage_domain("new-storage", "invalid", "host1", "/path")
 
     def test_create_storage_domain_host_not_found(self):
-        """测试主机不存在"""
+        """Host not found."""
         from ovirt_engine_mcp_server.mcp_storage_extended import StorageExtendedMCP
 
         mock_ovirt = MagicMock()
@@ -177,11 +177,11 @@ class TestStorageExtendedMCPCreateStorageDomain:
 
         storage_mcp = StorageExtendedMCP(mock_ovirt)
 
-        with pytest.raises(ValueError, match="主机不存在"):
+        with pytest.raises(ValueError, match="Host not found"):
             storage_mcp.create_storage_domain("new-storage", "nfs", "nonexistent", "/path")
 
     def test_create_storage_domain_already_exists(self):
-        """测试存储域已存在"""
+        """Storage domain already exists."""
         from ovirt_engine_mcp_server.mcp_storage_extended import StorageExtendedMCP
 
         mock_sd = _create_mock_storage_domain()
@@ -195,22 +195,22 @@ class TestStorageExtendedMCPCreateStorageDomain:
         mock_hosts_service.list.return_value = [mock_host]
 
         mock_sds_service = MagicMock()
-        mock_sds_service.list.return_value = [mock_sd]  # 名称已存在
+        mock_sds_service.list.return_value = [mock_sd]  # name already exists
 
         mock_ovirt.connection.system_service.return_value.hosts_service.return_value = mock_hosts_service
         mock_ovirt.connection.system_service.return_value.storage_domains_service.return_value = mock_sds_service
 
         storage_mcp = StorageExtendedMCP(mock_ovirt)
 
-        with pytest.raises(ValueError, match="已存在"):
+        with pytest.raises(ValueError, match="already exists"):
             storage_mcp.create_storage_domain("storage1", "nfs", "host1", "/path")
 
 
 class TestStorageExtendedMCPDeleteStorageDomain:
-    """测试 delete_storage_domain 方法"""
+    """Tests for delete_storage_domain method."""
 
     def test_delete_storage_domain_success(self):
-        """测试删除存储域成功"""
+        """Delete storage domain successfully."""
         from ovirt_engine_mcp_server.mcp_storage_extended import StorageExtendedMCP
 
         mock_sd = _create_mock_storage_domain()
@@ -234,7 +234,7 @@ class TestStorageExtendedMCPDeleteStorageDomain:
         assert result["success"] is True
 
     def test_delete_storage_domain_not_found(self):
-        """测试删除不存在的存储域"""
+        """Delete a nonexistent storage domain."""
         from ovirt_engine_mcp_server.mcp_storage_extended import StorageExtendedMCP
 
         mock_ovirt = MagicMock()
@@ -248,15 +248,15 @@ class TestStorageExtendedMCPDeleteStorageDomain:
 
         storage_mcp = StorageExtendedMCP(mock_ovirt)
 
-        with pytest.raises(ValueError, match="不存在"):
+        with pytest.raises(ValueError, match="Storage domain not found"):
             storage_mcp.delete_storage_domain("nonexistent")
 
 
 class TestStorageExtendedMCPDetachStorageDomain:
-    """测试 detach_storage_domain 方法"""
+    """Tests for detach_storage_domain method."""
 
     def test_detach_storage_domain_success(self):
-        """测试分离存储域成功"""
+        """Detach storage domain successfully."""
         from ovirt_engine_mcp_server.mcp_storage_extended import StorageExtendedMCP
 
         mock_sd = _create_mock_storage_domain()
@@ -287,10 +287,10 @@ class TestStorageExtendedMCPDetachStorageDomain:
 
 
 class TestStorageExtendedMCPAttachStorageDomain:
-    """测试 attach_storage_domain 方法"""
+    """Tests for attach_storage_domain method."""
 
     def test_attach_storage_domain_success(self):
-        """测试附加存储域成功"""
+        """Attach storage domain successfully."""
         from ovirt_engine_mcp_server.mcp_storage_extended import StorageExtendedMCP
 
         mock_sd = _create_mock_storage_domain()
@@ -319,10 +319,10 @@ class TestStorageExtendedMCPAttachStorageDomain:
 
 
 class TestStorageExtendedMCPGetStats:
-    """测试 get_storage_domain_stats 方法"""
+    """Tests for get_storage_domain_stats method."""
 
     def test_get_storage_domain_stats_success(self):
-        """测试获取存储域统计信息成功"""
+        """Get storage domain statistics successfully."""
         from ovirt_engine_mcp_server.mcp_storage_extended import StorageExtendedMCP
 
         mock_sd = _create_mock_storage_domain()
@@ -347,10 +347,10 @@ class TestStorageExtendedMCPGetStats:
 
 
 class TestStorageExtendedMCPTools:
-    """测试 MCP_TOOLS 注册表"""
+    """Tests for MCP_TOOLS registry."""
 
     def test_mcp_tools_defined(self):
-        """测试 MCP 工具注册表已定义"""
+        """MCP tool registry is defined."""
         from ovirt_engine_mcp_server.mcp_storage_extended import MCP_TOOLS
 
         expected_tools = [
@@ -515,5 +515,5 @@ class TestStorageConnectionsScoping:
         sds.storage_domain_service.return_value.get.side_effect = Exception("404")
         sds.list.return_value = []
 
-        with pytest.raises(ValueError, match="存储域不存在"):
+        with pytest.raises(ValueError, match="Storage domain not found"):
             StorageExtendedMCP(mock_ovirt).list_storage_connections("no-such-sd")

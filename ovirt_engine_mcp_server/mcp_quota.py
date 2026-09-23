@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-oVirt MCP Server - Quota 管理模块
-提供配额的创建、查询、更新、删除以及集群和存储限制管理
+oVirt MCP Server - quota module
+Provides quota creation, query, update, delete, and cluster/storage limit management
 """
 from typing import Dict, List, Any, Optional
 import logging
@@ -19,13 +19,13 @@ logger = logging.getLogger(__name__)
 
 
 class QuotaMCP(BaseMCP):
-    """Quota 管理 MCP"""
+    """Quota MCP"""
 
     def __init__(self, ovirt_mcp):
         super().__init__(ovirt_mcp)
 
     def _find_quota(self, datacenter: str, name_or_id: str) -> Optional[Any]:
-        """查找配额"""
+        """Find a quota"""
         dc = self._find_datacenter(datacenter)
         if not dc:
             return None
@@ -45,17 +45,17 @@ class QuotaMCP(BaseMCP):
 
     @require_connection
     def list_quotas(self, datacenter: str) -> List[Dict]:
-        """列出数据中心的配额
+        """List quotas in a data center
 
         Args:
-            datacenter: 数据中心名称或 ID
+            datacenter: Data center name or ID
 
         Returns:
-            配额列表
+            List of quotas
         """
         dc = self._find_datacenter(datacenter)
         if not dc:
-            raise ValueError(f"数据中心不存在: {datacenter}")
+            raise ValueError(f"Data center not found: {datacenter}")
 
         dc_service = self.connection.system_service().data_centers_service().data_center_service(dc.id)
         quotas_service = dc_service.quotas_service()
@@ -63,7 +63,7 @@ class QuotaMCP(BaseMCP):
         try:
             quotas = quotas_service.list()
         except Exception as e:
-            logger.error(f"获取配额列表失败: {e}")
+            logger.error(f"Failed to fetch quota list: {e}")
             return []
 
         return [
@@ -80,24 +80,24 @@ class QuotaMCP(BaseMCP):
 
     @require_connection
     def get_quota(self, datacenter: str, name_or_id: str) -> Optional[Dict]:
-        """获取配额详情
+        """Get quota details
 
         Args:
-            datacenter: 数据中心名称或 ID
-            name_or_id: 配额名称或 ID
+            datacenter: Data center name or ID
+            name_or_id: Quota name or ID
 
         Returns:
-            配额详情
+            Quota details
         """
         dc = self._find_datacenter(datacenter)
         if not dc:
-            raise ValueError(f"数据中心不存在: {datacenter}")
+            raise ValueError(f"Data center not found: {datacenter}")
 
         quota = self._find_quota(datacenter, name_or_id)
         if not quota:
             return None
 
-        # 获取集群限制
+        # Get cluster limits
         cluster_limits = []
         if hasattr(quota, 'cluster_hard_limit_pct') and quota.cluster_hard_limit_pct:
             cluster_limits.append({
@@ -105,7 +105,7 @@ class QuotaMCP(BaseMCP):
                 "value": quota.cluster_hard_limit_pct,
             })
 
-        # 获取存储限制
+        # Get storage limits
         storage_limits = []
         if hasattr(quota, 'storage_hard_limit_pct') and quota.storage_hard_limit_pct:
             storage_limits.append({
@@ -130,29 +130,29 @@ class QuotaMCP(BaseMCP):
                     description: str = "",
                     cluster_hard_limit_pct: int = 0,
                     storage_hard_limit_pct: int = 0) -> Dict[str, Any]:
-        """创建配额
+        """Create a quota
 
         Args:
-            name: 配额名称
-            datacenter: 数据中心名称
-            description: 描述
-            cluster_hard_limit_pct: 集群硬限制百分比
-            storage_hard_limit_pct: 存储硬限制百分比
+            name: Quota name
+            datacenter: Data center name
+            description: Description
+            cluster_hard_limit_pct: Cluster hard limit percentage
+            storage_hard_limit_pct: Storage hard limit percentage
 
         Returns:
-            创建结果
+            Creation result
         """
         dc = self._find_datacenter(datacenter)
         if not dc:
-            raise ValueError(f"数据中心不存在: {datacenter}")
+            raise ValueError(f"Data center not found: {datacenter}")
 
         dc_service = self.connection.system_service().data_centers_service().data_center_service(dc.id)
         quotas_service = dc_service.quotas_service()
 
-        # 检查是否已存在
+        # Check whether the quota already exists
         existing = quotas_service.list(search=f"name={_sanitize_search_value(name)}")
         if existing:
-            raise ValueError(f"配额已存在: {name}")
+            raise ValueError(f"Quota already exists: {name}")
 
         try:
             quota = quotas_service.add(
@@ -166,38 +166,38 @@ class QuotaMCP(BaseMCP):
 
             return {
                 "success": True,
-                "message": f"配额 {name} 已创建",
+                "message": f"Quota {name} created",
                 "quota_id": quota.id,
                 "data_center": dc.name,
             }
         except Exception as e:
-            raise RuntimeError(f"创建配额失败: {e}")
+            raise RuntimeError(f"Failed to create quota: {e}")
 
     @require_connection
     def update_quota(self, datacenter: str, name_or_id: str,
                     new_name: str = None, description: str = None,
                     cluster_hard_limit_pct: int = None,
                     storage_hard_limit_pct: int = None) -> Dict[str, Any]:
-        """更新配额
+        """Update a quota
 
         Args:
-            datacenter: 数据中心名称或 ID
-            name_or_id: 配额名称或 ID
-            new_name: 新名称
-            description: 新描述
-            cluster_hard_limit_pct: 集群硬限制百分比
-            storage_hard_limit_pct: 存储硬限制百分比
+            datacenter: Data center name or ID
+            name_or_id: Quota name or ID
+            new_name: New name
+            description: New description
+            cluster_hard_limit_pct: Cluster hard limit percentage
+            storage_hard_limit_pct: Storage hard limit percentage
 
         Returns:
-            更新结果
+            Update result
         """
         dc = self._find_datacenter(datacenter)
         if not dc:
-            raise ValueError(f"数据中心不存在: {datacenter}")
+            raise ValueError(f"Data center not found: {datacenter}")
 
         quota = self._find_quota(datacenter, name_or_id)
         if not quota:
-            raise ValueError(f"配额不存在: {name_or_id}")
+            raise ValueError(f"Quota not found: {name_or_id}")
 
         dc_service = self.connection.system_service().data_centers_service().data_center_service(dc.id)
         quotas_service = dc_service.quotas_service()
@@ -214,28 +214,28 @@ class QuotaMCP(BaseMCP):
 
         try:
             quota_service.update(quota)
-            return {"success": True, "message": f"配额已更新"}
+            return {"success": True, "message": f"Quota updated"}
         except Exception as e:
-            raise RuntimeError(f"更新配额失败: {e}")
+            raise RuntimeError(f"Failed to update quota: {e}")
 
     @require_connection
     def delete_quota(self, datacenter: str, name_or_id: str) -> Dict[str, Any]:
-        """删除配额
+        """Delete a quota
 
         Args:
-            datacenter: 数据中心名称或 ID
-            name_or_id: 配额名称或 ID
+            datacenter: Data center name or ID
+            name_or_id: Quota name or ID
 
         Returns:
-            删除结果
+            Deletion result
         """
         dc = self._find_datacenter(datacenter)
         if not dc:
-            raise ValueError(f"数据中心不存在: {datacenter}")
+            raise ValueError(f"Data center not found: {datacenter}")
 
         quota = self._find_quota(datacenter, name_or_id)
         if not quota:
-            raise ValueError(f"配额不存在: {name_or_id}")
+            raise ValueError(f"Quota not found: {name_or_id}")
 
         dc_service = self.connection.system_service().data_centers_service().data_center_service(dc.id)
         quotas_service = dc_service.quotas_service()
@@ -243,24 +243,24 @@ class QuotaMCP(BaseMCP):
 
         try:
             quota_service.remove()
-            return {"success": True, "message": f"配额 {quota.name} 已删除"}
+            return {"success": True, "message": f"Quota {quota.name} deleted"}
         except Exception as e:
-            raise RuntimeError(f"删除配额失败: {e}")
+            raise RuntimeError(f"Failed to delete quota: {e}")
 
     @require_connection
     def list_quota_cluster_limits(self, datacenter: str, name_or_id: str) -> List[Dict]:
-        """列出配额的集群限制
+        """List quota cluster limits
 
         Args:
-            datacenter: 数据中心名称或 ID
-            name_or_id: 配额名称或 ID
+            datacenter: Data center name or ID
+            name_or_id: Quota name or ID
 
         Returns:
-            集群限制列表
+            List of cluster limits
         """
         quota = self._find_quota(datacenter, name_or_id)
         if not quota:
-            raise ValueError(f"配额不存在: {name_or_id}")
+            raise ValueError(f"Quota not found: {name_or_id}")
 
         dc = self._find_datacenter(datacenter)
         dc_service = self.connection.system_service().data_centers_service().data_center_service(dc.id)
@@ -270,7 +270,7 @@ class QuotaMCP(BaseMCP):
         try:
             limits = quota_service.quota_cluster_limits_service().list()
         except Exception as e:
-            logger.error(f"获取集群限制失败: {e}")
+            logger.error(f"Failed to fetch cluster limits: {e}")
             return []
 
         return [
@@ -286,18 +286,18 @@ class QuotaMCP(BaseMCP):
 
     @require_connection
     def list_quota_storage_limits(self, datacenter: str, name_or_id: str) -> List[Dict]:
-        """列出配额的存储限制
+        """List quota storage limits
 
         Args:
-            datacenter: 数据中心名称或 ID
-            name_or_id: 配额名称或 ID
+            datacenter: Data center name or ID
+            name_or_id: Quota name or ID
 
         Returns:
-            存储限制列表
+            List of storage limits
         """
         quota = self._find_quota(datacenter, name_or_id)
         if not quota:
-            raise ValueError(f"配额不存在: {name_or_id}")
+            raise ValueError(f"Quota not found: {name_or_id}")
 
         dc = self._find_datacenter(datacenter)
         dc_service = self.connection.system_service().data_centers_service().data_center_service(dc.id)
@@ -307,7 +307,7 @@ class QuotaMCP(BaseMCP):
         try:
             limits = quota_service.quota_storage_limits_service().list()
         except Exception as e:
-            logger.error(f"获取存储限制失败: {e}")
+            logger.error(f"Failed to fetch storage limits: {e}")
             return []
 
         return [
@@ -321,13 +321,13 @@ class QuotaMCP(BaseMCP):
         ]
 
 
-# MCP 工具注册表
+# MCP tool registry
 MCP_TOOLS = {
-    "quota_list": {"method": "list_quotas", "description": "列出数据中心的配额"},
-    "quota_get": {"method": "get_quota", "description": "获取配额详情"},
-    "quota_create": {"method": "create_quota", "description": "创建配额"},
-    "quota_update": {"method": "update_quota", "description": "更新配额"},
-    "quota_delete": {"method": "delete_quota", "description": "删除配额"},
-    "quota_cluster_limit_list": {"method": "list_quota_cluster_limits", "description": "列出配额的集群限制"},
-    "quota_storage_limit_list": {"method": "list_quota_storage_limits", "description": "列出配额的存储限制"},
+    "quota_list": {"method": "list_quotas", "description": "List quotas in a data center"},
+    "quota_get": {"method": "get_quota", "description": "Get quota details"},
+    "quota_create": {"method": "create_quota", "description": "Create quota"},
+    "quota_update": {"method": "update_quota", "description": "Update quota"},
+    "quota_delete": {"method": "delete_quota", "description": "Delete quota"},
+    "quota_cluster_limit_list": {"method": "list_quota_cluster_limits", "description": "List quota cluster limits"},
+    "quota_storage_limit_list": {"method": "list_quota_storage_limits", "description": "List quota storage limits"},
 }

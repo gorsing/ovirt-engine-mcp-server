@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-oVirt MCP Server - 主机扩展模块
-提供主机详情、添加、删除和统计信息
+oVirt MCP Server - Host extension module
+Provides host details, add/remove, and statistics
 """
 from typing import Dict, List, Any, Optional
 import logging
@@ -43,14 +43,14 @@ def _storage_bytes(storage: Any) -> int:
 
 
 class HostExtendedMCP(BaseMCP):
-    """主机扩展管理 MCP"""
+    """Host extended management MCP."""
 
     def __init__(self, ovirt_mcp):
         super().__init__(ovirt_mcp)
 
     @require_connection
     def get_host(self, name_or_id: str) -> Optional[Dict]:
-        """获取主机详情"""
+        """Get host details."""
         host = self._find_host(name_or_id)
         if not host:
             return None
@@ -58,7 +58,7 @@ class HostExtendedMCP(BaseMCP):
         # Get host_service outside try blocks to avoid scope issues
         host_service = self.connection.system_service().hosts_service().host_service(host.id)
 
-        # 获取主机网络接口
+        # Get host network interfaces
         nics = []
         try:
             nics_service = host_service.nics_service()
@@ -71,12 +71,12 @@ class HostExtendedMCP(BaseMCP):
                     "ip": n.ip.address if n.ip else "",
                     "speed_bps": n.speed if n.speed else 0,
                 }
-                for n in nic_list[:10]  # 限制数量
+                for n in nic_list[:10]  # limit count
             ]
         except Exception as e:
-            logger.debug(f"获取主机网卡失败: {e}")
+            logger.debug(f"Failed to get host NICs: {e}")
 
-        # 获取主机存储
+        # Get host storage
         storage = []
         try:
             storage_service = host_service.storage_service()
@@ -91,7 +91,7 @@ class HostExtendedMCP(BaseMCP):
                 for s in storage_list[:10]
             ]
         except Exception as e:
-            logger.debug(f"获取主机存储失败: {e}")
+            logger.debug(f"Failed to get host storage: {e}")
 
         return {
             "id": host.id,
@@ -121,20 +121,20 @@ class HostExtendedMCP(BaseMCP):
     @require_connection
     def add_host(self, name: str, cluster: str, address: str,
                 password: str = None, ssh_port: int = 22) -> Dict[str, Any]:
-        """添加主机"""
-        # 查找集群
+        """Add a host."""
+        # Find the cluster
         clusters = self.connection.system_service().clusters_service().list(
             search=f"name={_sanitize_search_value(cluster)}"
         )
         if not clusters:
-            raise ValueError(f"集群不存在: {cluster}")
+            raise ValueError(f"Cluster not found: {cluster}")
 
         hosts_service = self.connection.system_service().hosts_service()
 
-        # 检查主机是否已存在
+        # Check whether the host already exists
         existing = hosts_service.list(search=f"name={_sanitize_search_value(name)}")
         if existing:
-            raise ValueError(f"主机已存在: {name}")
+            raise ValueError(f"Host already exists: {name}")
 
         try:
             host = hosts_service.add(
@@ -143,7 +143,7 @@ class HostExtendedMCP(BaseMCP):
                     address=address,
                     port=ssh_port,
                     cluster=sdk.types.Cluster(id=clusters[0].id),
-                    # SSH 认证需要密码或公钥
+                    # SSH authentication requires a password or public key
                     ssh=sdk.types.Ssh(
                         authentication_method=sdk.types.SshAuthenticationMethod.PASSWORD,
                         password=password,
@@ -152,33 +152,33 @@ class HostExtendedMCP(BaseMCP):
             )
             return {
                 "success": True,
-                "message": f"主机 {name} 已添加，等待激活",
+                "message": f"Host {name} added, waiting for activation",
                 "host_id": host.id,
             }
         except Exception as e:
-            raise RuntimeError(f"添加主机失败: {e}")
+            raise RuntimeError(f"Failed to add host: {e}")
 
     @require_connection
     def remove_host(self, name_or_id: str, force: bool = False) -> Dict[str, Any]:
-        """移除主机"""
+        """Remove a host."""
         host = self._find_host(name_or_id)
         if not host:
-            raise ValueError(f"主机不存在: {name_or_id}")
+            raise ValueError(f"Host not found: {name_or_id}")
 
         host_service = self.connection.system_service().hosts_service().host_service(host.id)
 
         try:
             host_service.remove(force=force)
-            return {"success": True, "message": f"主机 {host.name} 已移除"}
+            return {"success": True, "message": f"Host {host.name} removed"}
         except Exception as e:
-            raise RuntimeError(f"移除主机失败: {e}")
+            raise RuntimeError(f"Failed to remove host: {e}")
 
     @require_connection
     def get_host_stats(self, name_or_id: str) -> Dict[str, Any]:
-        """获取主机统计信息"""
+        """Get host statistics."""
         host = self._find_host(name_or_id)
         if not host:
-            raise ValueError(f"主机不存在: {name_or_id}")
+            raise ValueError(f"Host not found: {name_or_id}")
 
         host_service = self.connection.system_service().hosts_service().host_service(host.id)
         stats_service = host_service.statistics_service()
@@ -190,7 +190,7 @@ class HostExtendedMCP(BaseMCP):
             "stats": {},
         }
 
-        # 解析统计数据
+        # Parse statistics
         stat_mapping = {
             "memory.used": "memory_used_mb",
             "memory.free": "memory_free_mb",
@@ -218,7 +218,7 @@ class HostExtendedMCP(BaseMCP):
                 else:
                     result["stats"][key] = stat.value
 
-        # 计算汇总信息
+        # Compute summary values
         if "memory_used_mb" in result["stats"] and "memory_free_mb" in result["stats"]:
             total = result["stats"]["memory_used_mb"] + result["stats"]["memory_free_mb"]
             if total > 0:
@@ -230,10 +230,10 @@ class HostExtendedMCP(BaseMCP):
 
     @require_connection
     def get_host_devices(self, name_or_id: str) -> List[Dict]:
-        """获取主机设备列表"""
+        """List host devices."""
         host = self._find_host(name_or_id)
         if not host:
-            raise ValueError(f"主机不存在: {name_or_id}")
+            raise ValueError(f"Host not found: {name_or_id}")
 
         host_service = self.connection.system_service().hosts_service().host_service(host.id)
         devices_service = host_service.devices_service()
@@ -249,24 +249,24 @@ class HostExtendedMCP(BaseMCP):
                 "driver": d.driver or "",
                 "iommu_group": d.iommu_group if hasattr(d, "iommu_group") else None,
             }
-            for d in devices[:50]  # 限制数量
+            for d in devices[:50]  # limit count
         ]
 
-    # ── 主机网卡管理 ────────────────────────────────────────────────────────
+    # -- Host NIC management --------------------------------------------------------
 
     @require_connection
     def list_host_nics(self, name_or_id: str) -> List[Dict]:
-        """列出主机网卡
+        """List host NICs.
 
         Args:
-            name_or_id: 主机名称或 ID
+            name_or_id: Host name or ID
 
         Returns:
-            网卡列表
+            List of NICs
         """
         host = self._find_host(name_or_id)
         if not host:
-            raise ValueError(f"主机不存在: {name_or_id}")
+            raise ValueError(f"Host not found: {name_or_id}")
 
         host_service = self.connection.system_service().hosts_service().host_service(host.id)
         nics_service = host_service.nics_service()
@@ -274,7 +274,7 @@ class HostExtendedMCP(BaseMCP):
         try:
             nics = nics_service.list()
         except Exception as e:
-            logger.error(f"获取主机网卡失败: {e}")
+            logger.error(f"Failed to get host NICs: {e}")
             return []
 
         return [
@@ -296,24 +296,24 @@ class HostExtendedMCP(BaseMCP):
     @require_connection
     def update_host_nic(self, name_or_id: str, nic_name: str,
                        custom_properties: Dict = None) -> Dict[str, Any]:
-        """更新主机网卡配置
+        """Update host NIC configuration.
 
         Args:
-            name_or_id: 主机名称或 ID
-            nic_name: 网卡名称
-            custom_properties: 自定义属性
+            name_or_id: Host name or ID
+            nic_name: NIC name
+            custom_properties: Custom properties
 
         Returns:
-            更新结果
+            Update result
         """
         host = self._find_host(name_or_id)
         if not host:
-            raise ValueError(f"主机不存在: {name_or_id}")
+            raise ValueError(f"Host not found: {name_or_id}")
 
         host_service = self.connection.system_service().hosts_service().host_service(host.id)
         nics_service = host_service.nics_service()
 
-        # 查找网卡
+        # Find the NIC
         nics = nics_service.list()
         nic_id = None
         for n in nics:
@@ -322,7 +322,7 @@ class HostExtendedMCP(BaseMCP):
                 break
 
         if not nic_id:
-            raise ValueError(f"网卡不存在: {nic_name}")
+            raise ValueError(f"NIC not found: {nic_name}")
 
         nic_service = nics_service.nic_service(nic_id)
         nic = nic_service.get()
@@ -335,25 +335,25 @@ class HostExtendedMCP(BaseMCP):
 
         try:
             nic_service.update(nic)
-            return {"success": True, "message": f"网卡 {nic_name} 已更新"}
+            return {"success": True, "message": f"NIC {nic_name} updated"}
         except Exception as e:
-            raise RuntimeError(f"更新网卡失败: {e}")
+            raise RuntimeError(f"Failed to update NIC: {e}")
 
-    # ── 主机 NUMA 管理 ────────────────────────────────────────────────────────
+    # -- Host NUMA management --------------------------------------------------------
 
     @require_connection
     def get_host_numa(self, name_or_id: str) -> Dict[str, Any]:
-        """获取主机 NUMA 拓扑
+        """Get host NUMA topology.
 
         Args:
-            name_or_id: 主机名称或 ID
+            name_or_id: Host name or ID
 
         Returns:
-            NUMA 拓扑信息
+            NUMA topology information
         """
         host = self._find_host(name_or_id)
         if not host:
-            raise ValueError(f"主机不存在: {name_or_id}")
+            raise ValueError(f"Host not found: {name_or_id}")
 
         host_service = self.connection.system_service().hosts_service().host_service(host.id)
         numa_service = host_service.numa_nodes_service()
@@ -361,7 +361,7 @@ class HostExtendedMCP(BaseMCP):
         try:
             nodes = numa_service.list()
         except Exception as e:
-            logger.error(f"获取 NUMA 节点失败: {e}")
+            logger.error(f"Failed to get NUMA nodes: {e}")
             return {"host": host.name, "numa_nodes": []}
 
         numa_nodes = []
@@ -384,21 +384,21 @@ class HostExtendedMCP(BaseMCP):
             "node_count": len(numa_nodes),
         }
 
-    # ── 主机 Hook 管理 ────────────────────────────────────────────────────────
+    # -- Host hook management --------------------------------------------------------
 
     @require_connection
     def list_host_hooks(self, name_or_id: str) -> List[Dict]:
-        """列出主机 Hook
+        """List host hooks.
 
         Args:
-            name_or_id: 主机名称或 ID
+            name_or_id: Host name or ID
 
         Returns:
-            Hook 列表
+            List of hooks
         """
         host = self._find_host(name_or_id)
         if not host:
-            raise ValueError(f"主机不存在: {name_or_id}")
+            raise ValueError(f"Host not found: {name_or_id}")
 
         host_service = self.connection.system_service().hosts_service().host_service(host.id)
         hooks_service = host_service.hooks_service()
@@ -406,7 +406,7 @@ class HostExtendedMCP(BaseMCP):
         try:
             hooks = hooks_service.list()
         except Exception as e:
-            logger.error(f"获取主机 Hook 失败: {e}")
+            logger.error(f"Failed to get host hooks: {e}")
             return []
 
         return [
@@ -420,26 +420,26 @@ class HostExtendedMCP(BaseMCP):
             for h in hooks
         ]
 
-    # ── 主机 Fence 操作 ──────────────────────────────────────────────────────
+    # -- Host fence operations ------------------------------------------------------
 
     @require_connection
     def fence_host(self, name_or_id: str, action: str = "restart") -> Dict[str, Any]:
-        """对主机执行 Fence 操作
+        """Perform a fence operation on the host.
 
         Args:
-            name_or_id: 主机名称或 ID
-            action: 操作类型（restart/start/stop/status）
+            name_or_id: Host name or ID
+            action: Action type (restart/start/stop/status)
 
         Returns:
-            操作结果
+            Operation result
         """
         host = self._find_host(name_or_id)
         if not host:
-            raise ValueError(f"主机不存在: {name_or_id}")
+            raise ValueError(f"Host not found: {name_or_id}")
 
         valid_actions = ["restart", "start", "stop", "status"]
         if action.lower() not in valid_actions:
-            raise ValueError(f"无效操作: {action}，有效值: {valid_actions}")
+            raise ValueError(f"Invalid action: {action}, valid values: {valid_actions}")
 
         host_service = self.connection.system_service().hosts_service().host_service(host.id)
 
@@ -451,57 +451,57 @@ class HostExtendedMCP(BaseMCP):
             elif action.lower() == "stop":
                 host_service.fence(fence_type=sdk.types.FenceType.STOP)
             elif action.lower() == "status":
-                # 检查 fence 状态
+                # Check fence status
                 fence_status = host_service.fence(fence_type=sdk.types.FenceType.STATUS)
                 return {
                     "success": True,
-                    "message": f"Fence 状态已获取",
+                    "message": f"Fence status retrieved",
                     "host": host.name,
                     "action": action,
                 }
 
             return {
                 "success": True,
-                "message": f"主机 {host.name} Fence {action} 操作已执行",
+                "message": f"Fence {action} executed on host {host.name}",
                 "host_id": host.id,
                 "action": action,
             }
         except Exception as e:
-            raise RuntimeError(f"Fence 操作失败: {e}")
+            raise RuntimeError(f"Fence operation failed: {e}")
 
-    # ── 主机网络配置 ────────────────────────────────────────────────────────
+    # -- Host network configuration --------------------------------------------------------
 
     @require_connection
     def update_host_network(self, name_or_id: str, network: str,
                            nic: str = None, vlan_id: int = None,
                            bond: str = None) -> Dict[str, Any]:
-        """更新主机网络配置
+        """Update host network configuration.
 
         Args:
-            name_or_id: 主机名称或 ID
-            network: 网络名称
-            nic: 网卡名称（可选）
-            vlan_id: VLAN ID（可选）
-            bond: 绑定接口名称（可选）
+            name_or_id: Host name or ID
+            network: Network name
+            nic: NIC name (optional)
+            vlan_id: VLAN ID (optional)
+            bond: Bond interface name (optional)
 
         Returns:
-            更新结果
+            Update result
         """
         host = self._find_host(name_or_id)
         if not host:
-            raise ValueError(f"主机不存在: {name_or_id}")
+            raise ValueError(f"Host not found: {name_or_id}")
 
-        # 查找网络
+        # Find the network
         networks_service = self.connection.system_service().networks_service()
         networks = networks_service.list(search=f"name={_sanitize_search_value(network)}")
         if not networks:
-            raise ValueError(f"网络不存在: {network}")
+            raise ValueError(f"Network not found: {network}")
 
         host_service = self.connection.system_service().hosts_service().host_service(host.id)
         network_service = host_service.networks_service()
 
         try:
-            # 附加网络到主机
+            # Attach the network to the host
             network_service.add(
                 sdk.types.HostNetwork(
                     network=sdk.types.Network(id=networks[0].id),
@@ -512,68 +512,68 @@ class HostExtendedMCP(BaseMCP):
 
             return {
                 "success": True,
-                "message": f"网络 {network} 已配置到主机",
+                "message": f"Network {network} configured on host",
                 "host_id": host.id,
             }
         except Exception as e:
-            raise RuntimeError(f"更新主机网络失败: {e}")
+            raise RuntimeError(f"Failed to update host network: {e}")
 
-    # ── 主机设备更新 ────────────────────────────────────────────────────────
+    # -- Host device update --------------------------------------------------------
 
     @require_connection
     def update_host_device(self, name_or_id: str, device_name: str,
                           enabled: bool = True) -> Dict[str, Any]:
-        """更新主机设备配置
+        """Update host device configuration.
 
         Args:
-            name_or_id: 主机名称或 ID
-            device_name: 设备名称
-            enabled: 是否启用
+            name_or_id: Host name or ID
+            device_name: Device name
+            enabled: Whether enabled
 
         Returns:
-            更新结果
+            Update result
         """
         host = self._find_host(name_or_id)
         if not host:
-            raise ValueError(f"主机不存在: {name_or_id}")
+            raise ValueError(f"Host not found: {name_or_id}")
 
         host_service = self.connection.system_service().hosts_service().host_service(host.id)
         devices_service = host_service.devices_service()
 
-        # 查找设备
+        # Find the device
         devices = devices_service.list(search=f"name={_sanitize_search_value(device_name)}")
         if not devices:
-            raise ValueError(f"设备不存在: {device_name}")
+            raise ValueError(f"Device not found: {device_name}")
 
         device_service = devices_service.device_service(devices[0].id)
 
         try:
-            # 更新设备状态
+            # Update device state
             device = device_service.get()
-            # 根据设备类型进行不同操作
+            # Handle operations based on device type
             return {
                 "success": True,
-                "message": f"设备 {device_name} 已更新",
+                "message": f"Device {device_name} updated",
                 "enabled": enabled,
             }
         except Exception as e:
-            raise RuntimeError(f"更新设备失败: {e}")
+            raise RuntimeError(f"Failed to update device: {e}")
 
-    # ── 主机存储列表 ──────────────────────────────────────────────────────────
+    # -- Host storage list ----------------------------------------------------------
 
     @require_connection
     def list_host_storage(self, name_or_id: str) -> List[Dict]:
-        """列出主机存储
+        """List host storage.
 
         Args:
-            name_or_id: 主机名称或 ID
+            name_or_id: Host name or ID
 
         Returns:
-            存储列表
+            List of storage entries
         """
         host = self._find_host(name_or_id)
         if not host:
-            raise ValueError(f"主机不存在: {name_or_id}")
+            raise ValueError(f"Host not found: {name_or_id}")
 
         host_service = self.connection.system_service().hosts_service().host_service(host.id)
         storage_service = host_service.storage_service()
@@ -581,7 +581,7 @@ class HostExtendedMCP(BaseMCP):
         try:
             storage_list = storage_service.list()
         except Exception as e:
-            logger.error(f"获取主机存储失败: {e}")
+            logger.error(f"Failed to get host storage: {e}")
             return []
 
         return [
@@ -597,25 +597,25 @@ class HostExtendedMCP(BaseMCP):
             for s in storage_list
         ]
 
-    # ── 主机安装 ──────────────────────────────────────────────────────────────
+    # -- Host installation --------------------------------------------------------------
 
     @require_connection
     def install_host(self, name_or_id: str, root_password: str = None,
                     ssh_key: str = None, override_iptables: bool = False) -> Dict[str, Any]:
-        """安装/重新安装主机
+        """Install/reinstall a host.
 
         Args:
-            name_or_id: 主机名称或 ID
-            root_password: root 密码
-            ssh_key: SSH 公钥
-            override_iptables: 覆盖 iptables 规则
+            name_or_id: Host name or ID
+            root_password: Root password
+            ssh_key: SSH public key
+            override_iptables: Override iptables rules
 
         Returns:
-            安装结果
+            Installation result
         """
         host = self._find_host(name_or_id)
         if not host:
-            raise ValueError(f"主机不存在: {name_or_id}")
+            raise ValueError(f"Host not found: {name_or_id}")
 
         host_service = self.connection.system_service().hosts_service().host_service(host.id)
 
@@ -628,33 +628,33 @@ class HostExtendedMCP(BaseMCP):
 
             return {
                 "success": True,
-                "message": f"主机 {host.name} 安装任务已启动",
+                "message": f"Install task started for host {host.name}",
                 "host_id": host.id,
             }
         except Exception as e:
-            raise RuntimeError(f"安装主机失败: {e}")
+            raise RuntimeError(f"Failed to install host: {e}")
 
-    # ── iSCSI 发现和登录 ──────────────────────────────────────────────────────
+    # -- iSCSI discovery and login ------------------------------------------------------
 
     @require_connection
     def iscsi_discover(self, name_or_id: str, address: str,
                       port: int = 3260, username: str = None,
                       password: str = None) -> Dict[str, Any]:
-        """发现 iSCSI 目标
+        """Discover iSCSI targets.
 
         Args:
-            name_or_id: 主机名称或 ID
-            address: iSCSI 目标地址
-            port: 端口号，默认 3260
-            username: CHAP 用户名（可选）
-            password: CHAP 密码（可选）
+            name_or_id: Host name or ID
+            address: iSCSI target address
+            port: Port number, default 3260
+            username: CHAP username (optional)
+            password: CHAP password (optional)
 
         Returns:
-            发现的目标列表
+            List of discovered targets
         """
         host = self._find_host(name_or_id)
         if not host:
-            raise ValueError(f"主机不存在: {name_or_id}")
+            raise ValueError(f"Host not found: {name_or_id}")
 
         host_service = self.connection.system_service().hosts_service().host_service(host.id)
 
@@ -679,34 +679,34 @@ class HostExtendedMCP(BaseMCP):
 
             return {
                 "success": True,
-                "message": f"iSCSI 发现完成",
+                "message": f"iSCSI discovery completed",
                 "host": host.name,
                 "targets": targets,
                 "target_count": len(targets),
             }
         except Exception as e:
-            raise RuntimeError(f"iSCSI 发现失败: {e}")
+            raise RuntimeError(f"iSCSI discovery failed: {e}")
 
     @require_connection
     def iscsi_login(self, name_or_id: str, address: str, target: str,
                    port: int = 3260, username: str = None,
                    password: str = None) -> Dict[str, Any]:
-        """登录到 iSCSI 目标
+        """Log in to an iSCSI target.
 
         Args:
-            name_or_id: 主机名称或 ID
-            address: iSCSI 目标地址
-            target: 目标名称
-            port: 端口号，默认 3260
-            username: CHAP 用户名（可选）
-            password: CHAP 密码（可选）
+            name_or_id: Host name or ID
+            address: iSCSI target address
+            target: Target name
+            port: Port number, default 3260
+            username: CHAP username (optional)
+            password: CHAP password (optional)
 
         Returns:
-            登录结果
+            Login result
         """
         host = self._find_host(name_or_id)
         if not host:
-            raise ValueError(f"主机不存在: {name_or_id}")
+            raise ValueError(f"Host not found: {name_or_id}")
 
         host_service = self.connection.system_service().hosts_service().host_service(host.id)
 
@@ -723,33 +723,33 @@ class HostExtendedMCP(BaseMCP):
 
             return {
                 "success": True,
-                "message": f"已登录到 iSCSI 目标 {target}",
+                "message": f"Logged in to iSCSI target {target}",
                 "host": host.name,
                 "address": address,
                 "target": target,
             }
         except Exception as e:
-            raise RuntimeError(f"iSCSI 登录失败: {e}")
+            raise RuntimeError(f"iSCSI login failed: {e}")
 
 
-# MCP 工具注册表
+# MCP tool registry
 MCP_TOOLS = {
-    "host_get": {"method": "get_host", "description": "获取主机详情"},
-    "host_add": {"method": "add_host", "description": "添加主机"},
-    "host_remove": {"method": "remove_host", "description": "移除主机"},
-    "host_stats": {"method": "get_host_stats", "description": "获取主机统计信息"},
-    "host_devices": {"method": "get_host_devices", "description": "获取主机设备列表"},
+    "host_get": {"method": "get_host", "description": "Get host details"},
+    "host_add": {"method": "add_host", "description": "Add a host"},
+    "host_remove": {"method": "remove_host", "description": "Remove a host"},
+    "host_stats": {"method": "get_host_stats", "description": "Get host statistics"},
+    "host_devices": {"method": "get_host_devices", "description": "List host devices"},
 
-    # 新增工具
-    "host_nic_list": {"method": "list_host_nics", "description": "列出主机网卡"},
-    "host_nic_update": {"method": "update_host_nic", "description": "更新主机网卡配置"},
-    "host_numa_get": {"method": "get_host_numa", "description": "获取主机 NUMA 拓扑"},
-    "host_hook_list": {"method": "list_host_hooks", "description": "列出主机 Hook"},
-    "host_fence": {"method": "fence_host", "description": "对主机执行 Fence 操作"},
-    "host_network_update": {"method": "update_host_network", "description": "更新主机网络配置"},
-    "host_device_update": {"method": "update_host_device", "description": "更新主机设备配置"},
-    "host_storage_list": {"method": "list_host_storage", "description": "列出主机存储"},
-    "host_install": {"method": "install_host", "description": "安装/重新安装主机"},
-    "host_iscsi_discover": {"method": "iscsi_discover", "description": "发现 iSCSI 目标"},
-    "host_iscsi_login": {"method": "iscsi_login", "description": "登录到 iSCSI 目标"},
+    # New tools
+    "host_nic_list": {"method": "list_host_nics", "description": "List host NICs"},
+    "host_nic_update": {"method": "update_host_nic", "description": "Update host NIC configuration"},
+    "host_numa_get": {"method": "get_host_numa", "description": "Get host NUMA topology"},
+    "host_hook_list": {"method": "list_host_hooks", "description": "List host hooks"},
+    "host_fence": {"method": "fence_host", "description": "Perform fence operation on host"},
+    "host_network_update": {"method": "update_host_network", "description": "Update host network configuration"},
+    "host_device_update": {"method": "update_host_device", "description": "Update host device configuration"},
+    "host_storage_list": {"method": "list_host_storage", "description": "List host storage"},
+    "host_install": {"method": "install_host", "description": "Install/reinstall host"},
+    "host_iscsi_discover": {"method": "iscsi_discover", "description": "Discover iSCSI targets"},
+    "host_iscsi_login": {"method": "iscsi_login", "description": "Log in to iSCSI target"},
 }

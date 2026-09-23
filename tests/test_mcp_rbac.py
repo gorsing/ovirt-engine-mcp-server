@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Tests for RbacMCP class - RBAC 管理模块测试."""
+"""Tests for RbacMCP class - RBAC management module tests."""
 import pytest
 from unittest.mock import MagicMock
 
 
 def _create_mock_user(user_id="user-123", name="admin", user_name="admin@internal"):
-    """创建 mock User 对象"""
+    """Create mock User object"""
     mock_user = MagicMock()
     mock_user.id = user_id
     mock_user.name = name
@@ -18,7 +18,7 @@ def _create_mock_user(user_id="user-123", name="admin", user_name="admin@interna
 
 
 def _create_mock_group(group_id="group-123", name="Administrators"):
-    """创建 mock Group 对象"""
+    """Create mock Group object"""
     mock_group = MagicMock()
     mock_group.id = group_id
     mock_group.name = name
@@ -28,7 +28,7 @@ def _create_mock_group(group_id="group-123", name="Administrators"):
 
 
 def _create_mock_role(role_id="role-123", name="UserAdmin", administrative=False):
-    """创建 mock Role 对象"""
+    """Create mock Role object"""
     mock_role = MagicMock()
     mock_role.id = role_id
     mock_role.name = name
@@ -38,7 +38,7 @@ def _create_mock_role(role_id="role-123", name="UserAdmin", administrative=False
 
 
 def _create_mock_tag(tag_id="tag-123", name="production"):
-    """创建 mock Tag 对象"""
+    """Create mock Tag object"""
     mock_tag = MagicMock()
     mock_tag.id = tag_id
     mock_tag.name = name
@@ -48,10 +48,10 @@ def _create_mock_tag(tag_id="tag-123", name="production"):
 
 
 class TestRbacMCPListUsers:
-    """测试 list_users 方法"""
+    """Test the list_users method"""
 
     def test_list_users_empty(self):
-        """测试空用户列表"""
+        """Test empty user list"""
         from ovirt_engine_mcp_server.mcp_rbac import RbacMCP
 
         mock_ovirt = MagicMock()
@@ -68,7 +68,7 @@ class TestRbacMCPListUsers:
         assert result == []
 
     def test_list_users_with_data(self):
-        """测试有数据的用户列表"""
+        """Test user list with data"""
         from ovirt_engine_mcp_server.mcp_rbac import RbacMCP
 
         mock_users = [_create_mock_user()]
@@ -88,7 +88,7 @@ class TestRbacMCPListUsers:
         assert result[0]["name"] == "admin"
 
     def test_list_users_with_search(self):
-        """测试带搜索条件的用户列表"""
+        """Test user list with search"""
         from ovirt_engine_mcp_server.mcp_rbac import RbacMCP
 
         mock_users = [_create_mock_user()]
@@ -108,10 +108,10 @@ class TestRbacMCPListUsers:
 
 
 class TestRbacMCPGetUser:
-    """测试 get_user 方法"""
+    """Test the get_user method"""
 
     def test_get_user_success(self):
-        """测试获取用户详情成功"""
+        """Test get user details success"""
         from ovirt_engine_mcp_server.mcp_rbac import RbacMCP
 
         mock_user = _create_mock_user()
@@ -137,7 +137,7 @@ class TestRbacMCPGetUser:
         assert "permissions" in result
 
     def test_get_user_not_found(self):
-        """测试用户不存在"""
+        """Test user not found"""
         from ovirt_engine_mcp_server.mcp_rbac import RbacMCP
 
         mock_ovirt = MagicMock()
@@ -156,10 +156,10 @@ class TestRbacMCPGetUser:
 
 
 class TestRbacMCPListGroups:
-    """测试 list_groups 方法"""
+    """Test the list_groups method"""
 
     def test_list_groups_empty(self):
-        """测试空组列表"""
+        """Test empty group list"""
         from ovirt_engine_mcp_server.mcp_rbac import RbacMCP
 
         mock_ovirt = MagicMock()
@@ -176,7 +176,7 @@ class TestRbacMCPListGroups:
         assert result == []
 
     def test_list_groups_with_data(self):
-        """测试有数据的组列表"""
+        """Test group list with data"""
         from ovirt_engine_mcp_server.mcp_rbac import RbacMCP
 
         mock_groups = [_create_mock_group()]
@@ -197,10 +197,10 @@ class TestRbacMCPListGroups:
 
 
 class TestRbacMCPGetGroup:
-    """测试 get_group 方法"""
+    """Test the get_group method"""
 
     def test_get_group_success(self):
-        """测试获取组详情成功"""
+        """Test get group details success"""
         from ovirt_engine_mcp_server.mcp_rbac import RbacMCP
 
         mock_group = _create_mock_group()
@@ -226,10 +226,10 @@ class TestRbacMCPGetGroup:
 
 
 class TestRbacMCPListRoles:
-    """测试 list_roles 方法"""
+    """Test the list_roles method"""
 
     def test_list_roles_empty(self):
-        """测试空角色列表"""
+        """Test empty role list"""
         from ovirt_engine_mcp_server.mcp_rbac import RbacMCP
 
         mock_ovirt = MagicMock()
@@ -246,7 +246,7 @@ class TestRbacMCPListRoles:
         assert result == []
 
     def test_list_roles_with_data(self):
-        """测试有数据的角色列表"""
+        """Test role list with data"""
         from ovirt_engine_mcp_server.mcp_rbac import RbacMCP
 
         mock_roles = [
@@ -270,10 +270,10 @@ class TestRbacMCPListRoles:
 
 
 class TestRbacMCPGetRole:
-    """测试 get_role 方法"""
+    """Test the get_role method"""
 
     def test_get_role_success(self):
-        """测试获取角色详情成功"""
+        """Test get role details success"""
         from ovirt_engine_mcp_server.mcp_rbac import RbacMCP
 
         mock_role = _create_mock_role()
@@ -300,10 +300,10 @@ class TestRbacMCPGetRole:
 
 
 class TestRbacMCPCreateRole:
-    """测试 create_role 方法"""
+    """Test the create_role method"""
 
     def test_create_role_success(self):
-        """测试创建角色成功"""
+        """Test create role success"""
         from ovirt_engine_mcp_server.mcp_rbac import RbacMCP
 
         mock_role = _create_mock_role()
@@ -312,7 +312,7 @@ class TestRbacMCPCreateRole:
         mock_ovirt.connected = True
 
         mock_roles_service = MagicMock()
-        mock_roles_service.list.return_value = []  # 名称不冲突
+        mock_roles_service.list.return_value = []  # name does not conflict
         mock_roles_service.add.return_value = mock_role
 
         mock_ovirt.connection.system_service.return_value.roles_service.return_value = mock_roles_service
@@ -324,7 +324,7 @@ class TestRbacMCPCreateRole:
         assert "role_id" in result
 
     def test_create_role_already_exists(self):
-        """测试角色已存在"""
+        """Test role already exists"""
         from ovirt_engine_mcp_server.mcp_rbac import RbacMCP
 
         mock_role = _create_mock_role()
@@ -333,21 +333,21 @@ class TestRbacMCPCreateRole:
         mock_ovirt.connected = True
 
         mock_roles_service = MagicMock()
-        mock_roles_service.list.return_value = [mock_role]  # 名称已存在
+        mock_roles_service.list.return_value = [mock_role]  # name already exists
 
         mock_ovirt.connection.system_service.return_value.roles_service.return_value = mock_roles_service
 
         rbac_mcp = RbacMCP(mock_ovirt)
 
-        with pytest.raises(ValueError, match="已存在"):
+        with pytest.raises(ValueError, match="already exists"):
             rbac_mcp.create_role("UserAdmin")
 
 
 class TestRbacMCPDeleteRole:
-    """测试 delete_role 方法"""
+    """Test the delete_role method"""
 
     def test_delete_role_success(self):
-        """测试删除角色成功"""
+        """Test delete role success"""
         from ovirt_engine_mcp_server.mcp_rbac import RbacMCP
 
         mock_role = _create_mock_role()
@@ -362,7 +362,7 @@ class TestRbacMCPDeleteRole:
 
         mock_ovirt.connection.system_service.return_value.roles_service.return_value = mock_roles_service
 
-        # 设置 _find_role 返回
+        # Set _find_role return
         rbac_mcp = RbacMCP(mock_ovirt)
         rbac_mcp._find_role = MagicMock(return_value=mock_role)
 
@@ -372,10 +372,10 @@ class TestRbacMCPDeleteRole:
 
 
 class TestRbacMCPListPermits:
-    """测试 list_permits 方法"""
+    """Test the list_permits method"""
 
     def test_list_permits(self):
-        """测试列出权限单元"""
+        """Test list permits"""
         from ovirt_engine_mcp_server.mcp_rbac import RbacMCP
 
         mock_permit = MagicMock()
@@ -405,10 +405,10 @@ class TestRbacMCPListPermits:
 
 
 class TestRbacMCPListPermissions:
-    """测试 list_permissions 方法"""
+    """Test the list_permissions method"""
 
     def test_list_permissions(self):
-        """测试列出资源的权限"""
+        """Test list resource permissions"""
         from ovirt_engine_mcp_server.mcp_rbac import RbacMCP
 
         mock_vm = MagicMock()
@@ -448,10 +448,10 @@ class TestRbacMCPListPermissions:
 
 
 class TestRbacMCPListTags:
-    """测试 list_tags 方法"""
+    """Test the list_tags method"""
 
     def test_list_tags_empty(self):
-        """测试空标签列表"""
+        """Test empty tag list"""
         from ovirt_engine_mcp_server.mcp_rbac import RbacMCP
 
         mock_ovirt = MagicMock()
@@ -468,7 +468,7 @@ class TestRbacMCPListTags:
         assert result == []
 
     def test_list_tags_with_data(self):
-        """测试有数据的标签列表"""
+        """Test tag list with data"""
         from ovirt_engine_mcp_server.mcp_rbac import RbacMCP
 
         mock_tags = [_create_mock_tag()]
@@ -489,10 +489,10 @@ class TestRbacMCPListTags:
 
 
 class TestRbacMCPCreateTag:
-    """测试 create_tag 方法"""
+    """Test the create_tag method"""
 
     def test_create_tag_success(self):
-        """测试创建标签成功"""
+        """Test create tag success"""
         from ovirt_engine_mcp_server.mcp_rbac import RbacMCP
 
         mock_tag = _create_mock_tag()
@@ -501,7 +501,7 @@ class TestRbacMCPCreateTag:
         mock_ovirt.connected = True
 
         mock_tags_service = MagicMock()
-        mock_tags_service.list.return_value = []  # 名称不冲突
+        mock_tags_service.list.return_value = []  # name does not conflict
         mock_tags_service.add.return_value = mock_tag
 
         mock_ovirt.connection.system_service.return_value.tags_service.return_value = mock_tags_service
@@ -513,7 +513,7 @@ class TestRbacMCPCreateTag:
         assert "tag_id" in result
 
     def test_create_tag_already_exists(self):
-        """测试标签已存在"""
+        """Test tag already exists"""
         from ovirt_engine_mcp_server.mcp_rbac import RbacMCP
 
         mock_tag = _create_mock_tag()
@@ -522,21 +522,21 @@ class TestRbacMCPCreateTag:
         mock_ovirt.connected = True
 
         mock_tags_service = MagicMock()
-        mock_tags_service.list.return_value = [mock_tag]  # 名称已存在
+        mock_tags_service.list.return_value = [mock_tag]  # name already exists
 
         mock_ovirt.connection.system_service.return_value.tags_service.return_value = mock_tags_service
 
         rbac_mcp = RbacMCP(mock_ovirt)
 
-        with pytest.raises(ValueError, match="已存在"):
+        with pytest.raises(ValueError, match="already exists"):
             rbac_mcp.create_tag("production")
 
 
 class TestRbacMCPDeleteTag:
-    """测试 delete_tag 方法"""
+    """Test the delete_tag method"""
 
     def test_delete_tag_success(self):
-        """测试删除标签成功"""
+        """Test delete tag success"""
         from ovirt_engine_mcp_server.mcp_rbac import RbacMCP
 
         mock_tag = _create_mock_tag()
@@ -558,10 +558,10 @@ class TestRbacMCPDeleteTag:
 
 
 class TestRbacMCPTools:
-    """测试 MCP_TOOLS 注册表"""
+    """Test MCP_TOOLS registry"""
 
     def test_mcp_tools_defined(self):
-        """测试 MCP 工具注册表已定义"""
+        """Test MCP tool registry is defined"""
         from ovirt_engine_mcp_server.mcp_rbac import MCP_TOOLS
 
         expected_tools = [
@@ -605,5 +605,5 @@ class TestRbacMCPUnsupportedCollections:
         mock_ovirt = MagicMock()
         mock_ovirt.connected = True
 
-        with pytest.raises(ValueError, match="权限过滤器不可用"):
+        with pytest.raises(ValueError, match="Permission filters unavailable"):
             RbacMCP(mock_ovirt).list_filters()

@@ -68,7 +68,7 @@ class BaseMCP:
 Every method starts with:
 ```python
 if not self.ovirt.connected:
-    raise RuntimeError("未连接到 oVirt")
+    raise RuntimeError("Not connected to oVirt")
 ```
 
 **Recommendation:** Use a decorator:
@@ -77,7 +77,7 @@ def require_connection(func):
     @functools.wraps(func)
     def wrapper(self, *args, **kwargs):
         if not self.ovirt.connected:
-            raise RuntimeError("未连接到 oVirt")
+            raise RuntimeError("Not connected to oVirt")
         return func(self, *args, **kwargs)
     return wrapper
 ```

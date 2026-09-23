@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Ovirt MCP Server - 网络和集群增强模块
+Ovirt MCP Server - network and cluster extension module
 """
 from typing import Dict, List, Any, Optional
 import logging
@@ -18,24 +18,24 @@ logger = logging.getLogger(__name__)
 
 
 class NetworkMCP(BaseMCP):
-    """网络管理 MCP"""
+    """Network management MCP"""
 
     def __init__(self, ovirt_mcp):
         super().__init__(ovirt_mcp)
 
     def list_networks(self, cluster: str = None, datacenter: str = None) -> List[Dict]:
-        """列出网络"""
+        """List networks"""
         return self.ovirt.list_networks(cluster)
 
     @require_connection
     def get_network(self, name_or_id: str) -> Optional[Dict]:
-        """获取网络详情
+        """Get network details
 
         Args:
-            name_or_id: 网络名称或 ID
+            name_or_id: Network name or ID
 
         Returns:
-            网络详情
+            Network details
         """
         network = self._find_network(name_or_id)
         if not network:
@@ -55,7 +55,7 @@ class NetworkMCP(BaseMCP):
 
     @require_connection
     def list_vnics(self, name_or_id: str) -> List[Dict]:
-        """列出 VM 的网卡"""
+        """List VM NICs"""
         vm = self.ovirt._find_vm(name_or_id)
         if not vm: raise ValueError(f"VM not found: {name_or_id}")
 
@@ -77,12 +77,12 @@ class NetworkMCP(BaseMCP):
     @require_connection
     def add_nic(self, name_or_id: str, nic_name: str, network: str,
                interface: str = "virtio") -> Dict[str, Any]:
-        """添加网卡"""
+        """Add NIC"""
         vm = self.ovirt._find_vm(name_or_id)
         if not vm:
-            raise ValueError(f"VM 不存在: {name_or_id}")
+            raise ValueError(f"VM not found: {name_or_id}")
 
-        # 查找网络
+        # Find the network
         net = self._find_network(network)
 
         nics_service = self.connection.system_service().vms_service().vm_service(vm["id"]).nics_service()
@@ -95,16 +95,16 @@ class NetworkMCP(BaseMCP):
                     network=sdk.types.Network(id=net.id) if net else None,
                 )
             )
-            return {"success": True, "message": f"网卡 {nic_name} 已添加", "nic_id": nic.id}
+            return {"success": True, "message": f"NIC {nic_name} added", "nic_id": nic.id}
         except Exception as e:
-            raise RuntimeError(f"添加网卡失败: {e}")
+            raise RuntimeError(f"Failed to add NIC: {e}")
 
     @require_connection
     def remove_nic(self, name_or_id: str, nic_name: str) -> Dict[str, Any]:
-        """移除网卡"""
+        """Remove NIC"""
         vm = self.ovirt._find_vm(name_or_id)
         if not vm:
-            raise ValueError(f"VM 不存在: {name_or_id}")
+            raise ValueError(f"VM not found: {name_or_id}")
 
         nics_service = self.connection.system_service().vms_service().vm_service(vm["id"]).nics_service()
         nics = nics_service.list()
@@ -116,20 +116,20 @@ class NetworkMCP(BaseMCP):
                 break
 
         if not nic_id:
-            raise ValueError(f"网卡不存在: {nic_name}")
+            raise ValueError(f"NIC not found: {nic_name}")
 
         nics_service.nic_service(nic_id).remove()
-        return {"success": True, "message": f"网卡 {nic_name} 已移除"}
+        return {"success": True, "message": f"NIC {nic_name} removed"}
 
     @require_connection
     def create_network(self, name: str, datacenter: str, vlan: str = None,
                       description: str = "", mtu: int = 0) -> Dict[str, Any]:
-        """创建网络"""
-        # 获取数据中心
+        """Create network"""
+        # Get data center
         dcs = self.connection.system_service().data_centers_service().list(search=f"name={_sanitize_search_value(datacenter)}")
-        if not dcs: raise ValueError(f"数据中心不存在: {datacenter}")
+        if not dcs: raise ValueError(f"Data center not found: {datacenter}")
 
-        # 创建网络
+        # Create the network
         network = self.connection.system_service().networks_service().add(
             sdk.types.Network(
                 name=name,
@@ -140,14 +140,14 @@ class NetworkMCP(BaseMCP):
             )
         )
 
-        return {"success": True, "message": f"网络 {name} 已创建", "network_id": network.id}
+        return {"success": True, "message": f"Network {name} created", "network_id": network.id}
 
     @require_connection
     def update_network(self, name: str, new_name: str = None, description: str = None,
                       mtu: int = None) -> Dict[str, Any]:
-        """更新网络"""
+        """Update network"""
         networks = self.connection.system_service().networks_service().list(search=f"name={_sanitize_search_value(name)}")
-        if not networks: raise ValueError(f"网络不存在: {name}")
+        if not networks: raise ValueError(f"Network not found: {name}")
 
         network_service = self.connection.system_service().networks_service().network_service(networks[0].id)
         network = network_service.get()
@@ -161,29 +161,29 @@ class NetworkMCP(BaseMCP):
 
         network_service.update(network)
 
-        return {"success": True, "message": f"网络已更新"}
+        return {"success": True, "message": f"Network updated"}
 
     @require_connection
     def delete_network(self, name: str) -> Dict[str, Any]:
-        """删除网络"""
+        """Delete network"""
         networks = self.connection.system_service().networks_service().list(search=f"name={_sanitize_search_value(name)}")
-        if not networks: raise ValueError(f"网络不存在: {name}")
+        if not networks: raise ValueError(f"Network not found: {name}")
 
         self.connection.system_service().networks_service().network_service(networks[0].id).remove()
 
-        return {"success": True, "message": f"网络 {name} 已删除"}
+        return {"success": True, "message": f"Network {name} deleted"}
 
-    # ── VNIC Profile 管理 ──────────────────────────────────────────────────
+    # -- VNIC Profile management --------------------------------------------------
 
     @require_connection
     def list_vnic_profiles(self, network: str = None) -> List[Dict]:
-        """列出 VNIC Profile
+        """List VNIC profiles
 
         Args:
-            network: 网络名称（可选）
+            network: Network name (optional)
 
         Returns:
-            VNIC Profile 列表
+            List of VNIC profiles
         """
         profiles_service = self.connection.system_service().vnic_profiles_service()
 
@@ -194,7 +194,7 @@ class NetworkMCP(BaseMCP):
         try:
             profiles = profiles_service.list(search=search)
         except Exception as e:
-            logger.error(f"获取 VNIC Profile 列表失败: {e}")
+            logger.error(f"Failed to list VNIC profiles: {e}")
             return []
 
         return [
@@ -219,13 +219,13 @@ class NetworkMCP(BaseMCP):
 
     @require_connection
     def get_vnic_profile(self, name_or_id: str) -> Optional[Dict]:
-        """获取 VNIC Profile 详情
+        """Get VNIC profile details
 
         Args:
-            name_or_id: Profile 名称或 ID
+            name_or_id: Profile name or ID
 
         Returns:
-            Profile 详情
+            Profile details
         """
         profiles_service = self.connection.system_service().vnic_profiles_service()
 
@@ -243,7 +243,7 @@ class NetworkMCP(BaseMCP):
         return self._format_vnic_profile(profiles[0])
 
     def _format_vnic_profile(self, profile) -> Dict:
-        """格式化 VNIC Profile"""
+        """Format VNIC profile"""
         return {
             "id": profile.id,
             "name": profile.name,
@@ -267,21 +267,21 @@ class NetworkMCP(BaseMCP):
     def create_vnic_profile(self, name: str, network: str,
                            description: str = "",
                            port_mirroring: bool = False) -> Dict[str, Any]:
-        """创建 VNIC Profile
+        """Create VNIC profile
 
         Args:
-            name: Profile 名称
-            network: 网络名称
-            description: 描述
-            port_mirroring: 是否启用端口镜像
+            name: Profile name
+            network: Network name
+            description: Description
+            port_mirroring: Whether to enable port mirroring
 
         Returns:
-            创建结果
+            Creation result
         """
-        # 查找网络
+        # Find the network
         net = self._find_network(network)
         if not net:
-            raise ValueError(f"网络不存在: {network}")
+            raise ValueError(f"Network not found: {network}")
 
         profiles_service = self.connection.system_service().vnic_profiles_service()
 
@@ -296,30 +296,30 @@ class NetworkMCP(BaseMCP):
             )
             return {
                 "success": True,
-                "message": f"VNIC Profile {name} 已创建",
+                "message": f"VNIC Profile {name} created",
                 "profile_id": profile.id,
             }
         except Exception as e:
-            raise RuntimeError(f"创建 VNIC Profile 失败: {e}")
+            raise RuntimeError(f"Failed to create VNIC profile: {e}")
 
     @require_connection
     def update_vnic_profile(self, name_or_id: str, new_name: str = None,
                            description: str = None,
                            port_mirroring: bool = None) -> Dict[str, Any]:
-        """更新 VNIC Profile
+        """Update VNIC profile
 
         Args:
-            name_or_id: Profile 名称或 ID
-            new_name: 新名称
-            description: 新描述
-            port_mirroring: 端口镜像设置
+            name_or_id: Profile name or ID
+            new_name: New name
+            description: New description
+            port_mirroring: Port mirroring setting
 
         Returns:
-            更新结果
+            Update result
         """
         profiles_service = self.connection.system_service().vnic_profiles_service()
 
-        # 查找 profile
+        # Find the profile
         profile_id = None
         try:
             profile_service = profiles_service.profile_service(name_or_id)
@@ -328,7 +328,7 @@ class NetworkMCP(BaseMCP):
         except Exception:
             profiles = profiles_service.list(search=f"name={_sanitize_search_value(name_or_id)}")
             if not profiles:
-                raise ValueError(f"VNIC Profile 不存在: {name_or_id}")
+                raise ValueError(f"VNIC Profile not found: {name_or_id}")
             profile_id = profiles[0].id
             profile = profiles[0]
             profile_service = profiles_service.profile_service(profile_id)
@@ -341,21 +341,21 @@ class NetworkMCP(BaseMCP):
             profile.port_mirroring = port_mirroring
 
         profile_service.update(profile)
-        return {"success": True, "message": f"VNIC Profile 已更新"}
+        return {"success": True, "message": f"VNIC Profile updated"}
 
     @require_connection
     def delete_vnic_profile(self, name_or_id: str) -> Dict[str, Any]:
-        """删除 VNIC Profile
+        """Delete VNIC profile
 
         Args:
-            name_or_id: Profile 名称或 ID
+            name_or_id: Profile name or ID
 
         Returns:
-            删除结果
+            Delete result
         """
         profiles_service = self.connection.system_service().vnic_profiles_service()
 
-        # 查找 profile
+        # Find the profile
         profile_id = None
         try:
             profile_service = profiles_service.profile_service(name_or_id)
@@ -364,27 +364,27 @@ class NetworkMCP(BaseMCP):
         except Exception:
             profiles = profiles_service.list(search=f"name={_sanitize_search_value(name_or_id)}")
             if not profiles:
-                raise ValueError(f"VNIC Profile 不存在: {name_or_id}")
+                raise ValueError(f"VNIC Profile not found: {name_or_id}")
             profile_id = profiles[0].id
 
         profiles_service.profile_service(profile_id).remove()
-        return {"success": True, "message": f"VNIC Profile 已删除"}
+        return {"success": True, "message": f"VNIC Profile deleted"}
 
-    # ── Network Filter 管理 ────────────────────────────────────────────────
+    # -- Network Filter management ------------------------------------------------
 
     @require_connection
     def list_network_filters(self) -> List[Dict]:
-        """列出网络过滤器
+        """List network filters
 
         Returns:
-            网络过滤器列表
+            List of network filters
         """
         filters_service = self.connection.system_service().network_filters_service()
 
         try:
             filters = filters_service.list()
         except Exception as e:
-            logger.error(f"获取网络过滤器列表失败: {e}")
+            logger.error(f"Failed to list network filters: {e}")
             return []
 
         result = []
@@ -405,21 +405,21 @@ class NetworkMCP(BaseMCP):
             })
         return result
 
-    # ── MAC Pool 管理 ──────────────────────────────────────────────────────
+    # -- MAC Pool management ------------------------------------------------------
 
     @require_connection
     def list_mac_pools(self) -> List[Dict]:
-        """列出 MAC 地址池
+        """List MAC pools
 
         Returns:
-            MAC 地址池列表
+            List of MAC pools
         """
         pools_service = self.connection.system_service().mac_pools_service()
 
         try:
             pools = pools_service.list()
         except Exception as e:
-            logger.error(f"获取 MAC 地址池列表失败: {e}")
+            logger.error(f"Failed to list MAC pools: {e}")
             return []
 
         return [
@@ -436,17 +436,17 @@ class NetworkMCP(BaseMCP):
             for p in pools
         ]
 
-    # ── QoS 管理 ────────────────────────────────────────────────────────────
+    # -- QoS management ------------------------------------------------------------
 
     @require_connection
     def list_qos(self, datacenter: str = None) -> List[Dict]:
-        """列出 QoS 配置
+        """List QoS configurations
 
         Args:
-            datacenter: 数据中心名称（可选）
+            datacenter: Data center name (optional)
 
         Returns:
-            QoS 列表
+            List of QoS entries
         """
         # QoS is data-center-scoped in oVirt — ``SystemService`` has no
         # ``qoss_service``, so the old system-level lookup crashed with
@@ -455,7 +455,7 @@ class NetworkMCP(BaseMCP):
         if datacenter:
             dcs = dcs_service.list(search=f"name={_sanitize_search_value(datacenter)}")
             if not dcs:
-                raise ValueError(f"数据中心不存在: {datacenter}")
+                raise ValueError(f"Data center not found: {datacenter}")
         else:
             dcs = dcs_service.list()
 
@@ -464,7 +464,7 @@ class NetworkMCP(BaseMCP):
             try:
                 qoss = dcs_service.data_center_service(dc.id).qoss_service().list()
             except Exception as e:
-                logger.error(f"获取 QoS 列表失败: {e}")
+                logger.error(f"Failed to list QoS entries: {e}")
                 continue
 
             # when a datacenter was requested we already iterated only that DC
@@ -483,24 +483,24 @@ class NetworkMCP(BaseMCP):
 
 
 class ClusterMCP(BaseMCP):
-    """集群管理 MCP"""
+    """Cluster management MCP"""
 
     def __init__(self, ovirt_mcp):
         super().__init__(ovirt_mcp)
 
     def list_clusters(self) -> List[Dict]:
-        """列出集群"""
+        """List clusters"""
         return self.ovirt.list_clusters()
 
     @require_connection
     def get_cluster(self, name: str) -> Optional[Dict]:
-        """获取集群详情"""
+        """Get cluster details"""
         clusters = self.connection.system_service().clusters_service().list(search=f"name={_sanitize_search_value(name)}")
         if not clusters: return None
 
         c = clusters[0]
 
-        # 获取集群 CPU
+        # Get cluster CPU
         cpu_info = {}
         if c.cpu:
             cpu_info = {
@@ -533,32 +533,32 @@ class ClusterMCP(BaseMCP):
                       description: str = "",
                       gluster_service: bool = False,
                       threads_per_core: int = 1) -> Dict[str, Any]:
-        """创建集群
+        """Create cluster
 
         Args:
-            name: 集群名称
-            datacenter: 数据中心名称
-            cpu_type: CPU 类型
-            description: 描述
-            gluster_service: 是否启用 Gluster 服务
-            threads_per_core: 每核心线程数
+            name: Cluster name
+            datacenter: Data center name
+            cpu_type: CPU type
+            description: Description
+            gluster_service: Whether to enable the Gluster service
+            threads_per_core: Threads per core
 
         Returns:
-            创建结果
+            Creation result
         """
-        # 查找数据中心
+        # Find the data center
         dcs = self.connection.system_service().data_centers_service().list(
             search=f"name={_sanitize_search_value(datacenter)}"
         )
         if not dcs:
-            raise ValueError(f"数据中心不存在: {datacenter}")
+            raise ValueError(f"Data center not found: {datacenter}")
 
         clusters_service = self.connection.system_service().clusters_service()
 
-        # 检查是否已存在
+        # Check whether it already exists
         existing = clusters_service.list(search=f"name={_sanitize_search_value(name)}")
         if existing:
-            raise ValueError(f"集群已存在: {name}")
+            raise ValueError(f"Cluster already exists: {name}")
 
         try:
             cluster = clusters_service.add(
@@ -577,30 +577,30 @@ class ClusterMCP(BaseMCP):
 
             return {
                 "success": True,
-                "message": f"集群 {name} 已创建",
+                "message": f"Cluster {name} created",
                 "cluster_id": cluster.id,
             }
         except Exception as e:
-            raise RuntimeError(f"创建集群失败: {e}")
+            raise RuntimeError(f"Failed to create cluster: {e}")
 
     @require_connection
     def update_cluster(self, name_or_id: str, new_name: str = None,
                       description: str = None,
                       threads_per_core: int = None) -> Dict[str, Any]:
-        """更新集群
+        """Update cluster
 
         Args:
-            name_or_id: 集群名称或 ID
-            new_name: 新名称
-            description: 新描述
-            threads_per_core: 每核心线程数
+            name_or_id: Cluster name or ID
+            new_name: New name
+            description: New description
+            threads_per_core: Threads per core
 
         Returns:
-            更新结果
+            Update result
         """
         cluster = self._find_cluster(name_or_id)
         if not cluster:
-            raise ValueError(f"集群不存在: {name_or_id}")
+            raise ValueError(f"Cluster not found: {name_or_id}")
 
         clusters_service = self.connection.system_service().clusters_service()
         cluster_service = clusters_service.cluster_service(cluster.id)
@@ -614,44 +614,44 @@ class ClusterMCP(BaseMCP):
 
         try:
             cluster_service.update(cluster)
-            return {"success": True, "message": f"集群已更新"}
+            return {"success": True, "message": f"Cluster updated"}
         except Exception as e:
-            raise RuntimeError(f"更新集群失败: {e}")
+            raise RuntimeError(f"Failed to update cluster: {e}")
 
     @require_connection
     def delete_cluster(self, name_or_id: str) -> Dict[str, Any]:
-        """删除集群
+        """Delete cluster
 
         Args:
-            name_or_id: 集群名称或 ID
+            name_or_id: Cluster name or ID
 
         Returns:
-            删除结果
+            Delete result
         """
         cluster = self._find_cluster(name_or_id)
         if not cluster:
-            raise ValueError(f"集群不存在: {name_or_id}")
+            raise ValueError(f"Cluster not found: {name_or_id}")
 
         clusters_service = self.connection.system_service().clusters_service()
         cluster_service = clusters_service.cluster_service(cluster.id)
 
         try:
             cluster_service.remove()
-            return {"success": True, "message": f"集群 {cluster.name} 已删除"}
+            return {"success": True, "message": f"Cluster {cluster.name} deleted"}
         except Exception as e:
-            raise RuntimeError(f"删除集群失败: {e}")
+            raise RuntimeError(f"Failed to delete cluster: {e}")
 
     def list_cluster_hosts(self, name: str) -> List[Dict]:
-        """列出集群主机"""
+        """List cluster hosts"""
         hosts = self.ovirt.list_hosts(cluster=name)
         return hosts
 
     def list_cluster_vms(self, name: str, status: str = None) -> List[Dict]:
-        """列出集群虚拟机"""
+        """List cluster VMs"""
         return self.ovirt.list_vms(cluster=name, status=status)
 
     def get_cluster_cpu_load(self, name: str) -> Dict[str, Any]:
-        """获取集群 CPU 负载"""
+        """Get cluster CPU load"""
         hosts = self.list_cluster_hosts(name)
 
         if not hosts:
@@ -668,14 +668,14 @@ class ClusterMCP(BaseMCP):
         }
 
     def get_cluster_memory_usage(self, name: str) -> Dict[str, Any]:
-        """获取集群内存使用"""
+        """Get cluster memory usage"""
         hosts = self.list_cluster_hosts(name)
 
         if not hosts:
             return {"cluster": name, "memory_usage": 0}
 
         total_mem = sum(h.get("memory_gb", 0) for h in hosts)
-        # 简化计算
+        # Simplified calculation
         avg_usage = sum(h.get("memory_usage", 0) for h in hosts) / len(hosts)
 
         return {
@@ -685,21 +685,21 @@ class ClusterMCP(BaseMCP):
             "host_count": len(hosts)
         }
 
-    # ── CPU Profile 管理 ────────────────────────────────────────────────────
+    # -- CPU Profile management ----------------------------------------------------
 
     @require_connection
     def list_cpu_profiles(self, cluster: str) -> List[Dict]:
-        """列出集群的 CPU Profile
+        """List CPU profiles of a cluster
 
         Args:
-            cluster: 集群名称或 ID
+            cluster: Cluster name or ID
 
         Returns:
-            CPU Profile 列表
+            List of CPU profiles
         """
         cluster_obj = self._find_cluster(cluster)
         if not cluster_obj:
-            raise ValueError(f"集群不存在: {cluster}")
+            raise ValueError(f"Cluster not found: {cluster}")
 
         cluster_service = self.connection.system_service().clusters_service().cluster_service(cluster_obj.id)
         profiles_service = cluster_service.cpu_profiles_service()
@@ -707,7 +707,7 @@ class ClusterMCP(BaseMCP):
         try:
             profiles = profiles_service.list()
         except Exception as e:
-            logger.error(f"获取 CPU Profile 列表失败: {e}")
+            logger.error(f"Failed to list CPU profiles: {e}")
             return []
 
         return [
@@ -722,18 +722,18 @@ class ClusterMCP(BaseMCP):
 
     @require_connection
     def get_cpu_profile(self, cluster: str, name_or_id: str) -> Optional[Dict]:
-        """获取 CPU Profile 详情
+        """Get CPU profile details
 
         Args:
-            cluster: 集群名称或 ID
-            name_or_id: Profile 名称或 ID
+            cluster: Cluster name or ID
+            name_or_id: Profile name or ID
 
         Returns:
-            CPU Profile 详情
+            CPU profile details
         """
         cluster_obj = self._find_cluster(cluster)
         if not cluster_obj:
-            raise ValueError(f"集群不存在: {cluster}")
+            raise ValueError(f"Cluster not found: {cluster}")
 
         cluster_service = self.connection.system_service().clusters_service().cluster_service(cluster_obj.id)
         profiles_service = cluster_service.cpu_profiles_service()
@@ -762,24 +762,24 @@ class ClusterMCP(BaseMCP):
 
 
 class TemplateMCP(BaseMCP):
-    """模板管理 MCP"""
+    """Template management MCP"""
 
     def __init__(self, ovirt_mcp):
         super().__init__(ovirt_mcp)
 
     def list_templates(self, cluster: str = None) -> List[Dict]:
-        """列出模板"""
+        """List templates"""
         return self.ovirt.list_templates(cluster)
 
     @require_connection
     def get_template(self, name: str) -> Optional[Dict]:
-        """获取模板详情"""
+        """Get template details"""
         templates = self.connection.system_service().templates_service().list(search=f"name={_sanitize_search_value(name)}")
         if not templates: return None
 
         t = templates[0]
 
-        # 获取磁盘信息
+        # Get disk information
         # Template objects expose no *_service() methods — go through the
         # service, otherwise the AttributeError was swallowed and disks
         # always came back empty.
@@ -815,7 +815,7 @@ class TemplateMCP(BaseMCP):
 
     def create_vm_from_template(self, name: str, template: str, cluster: str,
                                 memory_mb: int = None, cpu_cores: int = None) -> Dict[str, Any]:
-        """从模板创建 VM"""
+        """Create VM from template"""
         return self.ovirt.create_vm(
             name=name,
             cluster=cluster,
@@ -825,95 +825,95 @@ class TemplateMCP(BaseMCP):
         )
 
     def clone_template(self, name: str, new_name: str, cluster: str) -> Dict[str, Any]:
-        """克隆模板"""
-        # 先从模板创建 VM
+        """Clone template"""
+        # First create a VM from the template
         result = self.create_vm_from_template(new_name, name, cluster)
         return result
 
 
-# MCP 工具注册表
+# MCP tool registry
 MCP_TOOLS = {
-    # 核心 VM 操作
-    "vm_list": {"method": "list_vms", "description": "列出虚拟机"},
-    "vm_get": {"method": "get_vm", "description": "获取虚拟机详情"},
-    "vm_create": {"method": "create_vm", "description": "创建虚拟机"},
-    "vm_delete": {"method": "delete_vm", "description": "删除虚拟机"},
-    "vm_start": {"method": "start_vm", "description": "启动虚拟机"},
-    "vm_stop": {"method": "stop_vm", "description": "关闭虚拟机"},
-    "vm_restart": {"method": "restart_vm", "description": "重启虚拟机"},
-    "vm_update_resources": {"method": "update_vm_resources", "description": "更新 VM 资源"},
-    "vm_rename": {"method": "rename_vm", "description": "重命名虚拟机"},
-    "vm_stats": {"method": "get_vm_stats", "description": "获取 VM 统计"},
+    # Core VM operations
+    "vm_list": {"method": "list_vms", "description": "List VMs"},
+    "vm_get": {"method": "get_vm", "description": "Get VM details"},
+    "vm_create": {"method": "create_vm", "description": "Create VM"},
+    "vm_delete": {"method": "delete_vm", "description": "Delete VM"},
+    "vm_start": {"method": "start_vm", "description": "Start VM"},
+    "vm_stop": {"method": "stop_vm", "description": "Stop VM"},
+    "vm_restart": {"method": "restart_vm", "description": "Restart VM"},
+    "vm_update_resources": {"method": "update_vm_resources", "description": "Update VM resources"},
+    "vm_rename": {"method": "rename_vm", "description": "Rename VM"},
+    "vm_stats": {"method": "get_vm_stats", "description": "Get VM statistics"},
 
-    # 快照管理
-    "snapshot_list": {"method": "list_snapshots", "description": "列出快照"},
-    "snapshot_create": {"method": "create_snapshot", "description": "创建快照"},
-    "snapshot_restore": {"method": "restore_snapshot", "description": "恢复快照"},
-    "snapshot_delete": {"method": "delete_snapshot", "description": "删除快照"},
+    # Snapshot management
+    "snapshot_list": {"method": "list_snapshots", "description": "List snapshots"},
+    "snapshot_create": {"method": "create_snapshot", "description": "Create snapshot"},
+    "snapshot_restore": {"method": "restore_snapshot", "description": "Restore snapshot"},
+    "snapshot_delete": {"method": "delete_snapshot", "description": "Delete snapshot"},
 
-    # 磁盘管理
-    "disk_list": {"method": "list_disks", "description": "列出磁盘"},
-    "disk_create": {"method": "create_disk", "description": "创建磁盘"},
-    "disk_attach": {"method": "attach_disk", "description": "附加磁盘"},
+    # Disk management
+    "disk_list": {"method": "list_disks", "description": "List disks"},
+    "disk_create": {"method": "create_disk", "description": "Create disk"},
+    "disk_attach": {"method": "attach_disk", "description": "Attach disk"},
 
-    # 网络管理
-    "network_list": {"method": "list_networks", "description": "列出网络"},
-    "network_get": {"method": "get_network", "description": "获取网络详情"},
-    "network_create": {"method": "create_network", "description": "创建网络"},
-    "network_update": {"method": "update_network", "description": "更新网络"},
-    "network_delete": {"method": "delete_network", "description": "删除网络"},
-    "nic_list": {"method": "list_vnics", "description": "列出网卡"},
-    "nic_add": {"method": "add_nic", "description": "添加网卡"},
-    "nic_remove": {"method": "remove_nic", "description": "移除网卡"},
+    # Network management
+    "network_list": {"method": "list_networks", "description": "List networks"},
+    "network_get": {"method": "get_network", "description": "Get network details"},
+    "network_create": {"method": "create_network", "description": "Create network"},
+    "network_update": {"method": "update_network", "description": "Update network"},
+    "network_delete": {"method": "delete_network", "description": "Delete network"},
+    "nic_list": {"method": "list_vnics", "description": "List NICs"},
+    "nic_add": {"method": "add_nic", "description": "Add NIC"},
+    "nic_remove": {"method": "remove_nic", "description": "Remove NIC"},
 
-    # VNIC Profile 管理
-    "vnic_profile_list": {"method": "list_vnic_profiles", "description": "列出 VNIC Profile"},
-    "vnic_profile_get": {"method": "get_vnic_profile", "description": "获取 VNIC Profile 详情"},
-    "vnic_profile_create": {"method": "create_vnic_profile", "description": "创建 VNIC Profile"},
-    "vnic_profile_update": {"method": "update_vnic_profile", "description": "更新 VNIC Profile"},
-    "vnic_profile_delete": {"method": "delete_vnic_profile", "description": "删除 VNIC Profile"},
+    # VNIC Profile management
+    "vnic_profile_list": {"method": "list_vnic_profiles", "description": "List VNIC profiles"},
+    "vnic_profile_get": {"method": "get_vnic_profile", "description": "Get VNIC profile details"},
+    "vnic_profile_create": {"method": "create_vnic_profile", "description": "Create VNIC profile"},
+    "vnic_profile_update": {"method": "update_vnic_profile", "description": "Update VNIC profile"},
+    "vnic_profile_delete": {"method": "delete_vnic_profile", "description": "Delete VNIC profile"},
 
-    # Network Filter 管理
-    "network_filter_list": {"method": "list_network_filters", "description": "列出网络过滤器"},
+    # Network Filter management
+    "network_filter_list": {"method": "list_network_filters", "description": "List network filters"},
 
-    # MAC Pool 管理
-    "mac_pool_list": {"method": "list_mac_pools", "description": "列出 MAC 地址池"},
+    # MAC Pool management
+    "mac_pool_list": {"method": "list_mac_pools", "description": "List MAC pools"},
 
-    # QoS 管理
-    "qos_list": {"method": "list_qos", "description": "列出 QoS 配置"},
+    # QoS management
+    "qos_list": {"method": "list_qos", "description": "List QoS configurations"},
 
-    # 主机管理
-    "host_list": {"method": "list_hosts", "description": "列出主机"},
-    "host_activate": {"method": "activate_host", "description": "激活主机"},
-    "host_deactivate": {"method": "deactivate_host", "description": "维护主机"},
+    # Host management
+    "host_list": {"method": "list_hosts", "description": "List hosts"},
+    "host_activate": {"method": "activate_host", "description": "Activate host"},
+    "host_deactivate": {"method": "deactivate_host", "description": "Deactivate host"},
 
-    # 集群管理
-    "cluster_list": {"method": "list_clusters", "description": "列出集群"},
-    "cluster_get": {"method": "get_cluster", "description": "获取集群详情"},
-    "cluster_create": {"method": "create_cluster", "description": "创建集群"},
-    "cluster_update": {"method": "update_cluster", "description": "更新集群"},
-    "cluster_delete": {"method": "delete_cluster", "description": "删除集群"},
-    "cluster_hosts": {"method": "list_cluster_hosts", "description": "集群主机"},
-    "cluster_vms": {"method": "list_cluster_vms", "description": "集群 VM"},
-    "cluster_cpu_load": {"method": "get_cluster_cpu_load", "description": "集群 CPU 负载"},
-    "cluster_memory_usage": {"method": "get_cluster_memory_usage", "description": "集群内存使用"},
+    # Cluster management
+    "cluster_list": {"method": "list_clusters", "description": "List clusters"},
+    "cluster_get": {"method": "get_cluster", "description": "Get cluster details"},
+    "cluster_create": {"method": "create_cluster", "description": "Create cluster"},
+    "cluster_update": {"method": "update_cluster", "description": "Update cluster"},
+    "cluster_delete": {"method": "delete_cluster", "description": "Delete cluster"},
+    "cluster_hosts": {"method": "list_cluster_hosts", "description": "Cluster hosts"},
+    "cluster_vms": {"method": "list_cluster_vms", "description": "Cluster VMs"},
+    "cluster_cpu_load": {"method": "get_cluster_cpu_load", "description": "Cluster CPU load"},
+    "cluster_memory_usage": {"method": "get_cluster_memory_usage", "description": "Cluster memory usage"},
 
-    # CPU Profile 管理
-    "cpu_profile_list": {"method": "list_cpu_profiles", "description": "列出 CPU Profile"},
-    "cpu_profile_get": {"method": "get_cpu_profile", "description": "获取 CPU Profile 详情"},
+    # CPU Profile management
+    "cpu_profile_list": {"method": "list_cpu_profiles", "description": "List CPU profiles"},
+    "cpu_profile_get": {"method": "get_cpu_profile", "description": "Get CPU profile details"},
 
-    # 存储管理
-    "storage_list": {"method": "list_storage_domains", "description": "列出存储域"},
-    "storage_attach": {"method": "attach_storage", "description": "挂载存储"},
+    # Storage management
+    "storage_list": {"method": "list_storage_domains", "description": "List storage domains"},
+    "storage_attach": {"method": "attach_storage", "description": "Attach storage"},
 
-    # 模板管理
-    "template_list": {"method": "list_templates", "description": "列出模板"},
-    "template_vm_create": {"method": "create_vm_from_template", "description": "从模板创建 VM"},
+    # Template management
+    "template_list": {"method": "list_templates", "description": "List templates"},
+    "template_vm_create": {"method": "create_vm_from_template", "description": "Create VM from template"},
 }
 
 
 def get_tool_list() -> List[Dict]:
-    """获取所有 MCP 工具定义"""
+    """Get all MCP tool definitions"""
     return [
         {"name": name, "description": info["description"]}
         for name, info in MCP_TOOLS.items()

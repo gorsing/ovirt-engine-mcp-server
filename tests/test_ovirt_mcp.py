@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tests for OvirtMCP class - 综合测试覆盖."""
+"""Tests for OvirtMCP class - comprehensive coverage."""
 from types import SimpleNamespace
 
 import pytest
@@ -20,7 +20,7 @@ def mock_config():
 
 
 def _create_mock_vm(vm_id="vm-123", name="test-vm", status="up", memory=4294967296):
-    """创建 mock VM 对象"""
+    """Create a mock VM object."""
     mock_vm = MagicMock()
     mock_vm.id = vm_id
     mock_vm.name = name
@@ -50,7 +50,7 @@ def _create_mock_vm(vm_id="vm-123", name="test-vm", status="up", memory=42949672
 
 
 def _create_mock_snapshot(snap_id="snap-123", description="Test snapshot"):
-    """创建 mock Snapshot 对象"""
+    """Create a mock Snapshot object."""
     mock_snap = MagicMock()
     mock_snap.id = snap_id
     mock_snap.description = description
@@ -61,7 +61,7 @@ def _create_mock_snapshot(snap_id="snap-123", description="Test snapshot"):
 
 
 def _create_mock_disk(disk_id="disk-123", name="disk1", size=53687091200):
-    """创建 mock Disk 对象"""
+    """Create a mock Disk object."""
     mock_disk = MagicMock()
     mock_disk.id = disk_id
     mock_disk.name = name
@@ -229,7 +229,7 @@ class TestOvirtMCPVMOperations:
 
     @patch("ovirt_engine_mcp_server.ovirt_mcp.Connection")
     def test_stop_vm_graceful(self, mock_conn_class, mock_config):
-        """测试优雅关闭 VM (shutdown)"""
+        """Test graceful VM shutdown."""
         from ovirt_engine_mcp_server.ovirt_mcp import OvirtMCP
 
         mock_vm = _create_mock_vm()
@@ -254,7 +254,7 @@ class TestOvirtMCPVMOperations:
 
     @patch("ovirt_engine_mcp_server.ovirt_mcp.Connection")
     def test_stop_vm_force(self, mock_conn_class, mock_config):
-        """测试强制关闭 VM (stop)"""
+        """Test forced VM stop."""
         from ovirt_engine_mcp_server.ovirt_mcp import OvirtMCP
 
         mock_vm = _create_mock_vm()
@@ -279,7 +279,7 @@ class TestOvirtMCPVMOperations:
 
     @patch("ovirt_engine_mcp_server.ovirt_mcp.Connection")
     def test_restart_vm(self, mock_conn_class, mock_config):
-        """测试重启 VM"""
+        """Test VM restart."""
         from ovirt_engine_mcp_server.ovirt_mcp import OvirtMCP
 
         mock_vm = _create_mock_vm()
@@ -303,7 +303,7 @@ class TestOvirtMCPVMOperations:
 
     @patch("ovirt_engine_mcp_server.ovirt_mcp.Connection")
     def test_delete_vm(self, mock_conn_class, mock_config):
-        """测试删除 VM"""
+        """Test VM deletion."""
         from ovirt_engine_mcp_server.ovirt_mcp import OvirtMCP
 
         mock_vm = _create_mock_vm(status="down")
@@ -328,7 +328,7 @@ class TestOvirtMCPVMOperations:
 
     @patch("ovirt_engine_mcp_server.ovirt_mcp.Connection")
     def test_update_vm_resources(self, mock_conn_class, mock_config):
-        """测试更新 VM 资源"""
+        """Test updating VM resources."""
         from ovirt_engine_mcp_server.ovirt_mcp import OvirtMCP
 
         mock_vm = _create_mock_vm()
@@ -353,7 +353,7 @@ class TestOvirtMCPVMOperations:
 
     @patch("ovirt_engine_mcp_server.ovirt_mcp.Connection")
     def test_create_vm_success(self, mock_conn_class, mock_config):
-        """测试创建 VM 成功"""
+        """Test successful VM creation."""
         from ovirt_engine_mcp_server.ovirt_mcp import OvirtMCP
 
         mock_conn = MagicMock()
@@ -412,7 +412,7 @@ class TestOvirtMCPSnapshotOperations:
 
     @patch("ovirt_engine_mcp_server.ovirt_mcp.Connection")
     def test_list_snapshots(self, mock_conn_class, mock_config):
-        """测试列出快照"""
+        """Test listing snapshots."""
         from ovirt_engine_mcp_server.ovirt_mcp import OvirtMCP
 
         mock_vm = _create_mock_vm()
@@ -439,7 +439,7 @@ class TestOvirtMCPSnapshotOperations:
 
     @patch("ovirt_engine_mcp_server.ovirt_mcp.Connection")
     def test_create_snapshot(self, mock_conn_class, mock_config):
-        """测试创建快照"""
+        """Test snapshot creation."""
         from ovirt_engine_mcp_server.ovirt_mcp import OvirtMCP
 
         mock_vm = _create_mock_vm()
@@ -463,7 +463,7 @@ class TestOvirtMCPSnapshotOperations:
 
     @patch("ovirt_engine_mcp_server.ovirt_mcp.Connection")
     def test_restore_snapshot(self, mock_conn_class, mock_config):
-        """测试恢复快照"""
+        """Test snapshot restore."""
         from ovirt_engine_mcp_server.ovirt_mcp import OvirtMCP
 
         mock_vm = _create_mock_vm(status="down")
@@ -490,7 +490,7 @@ class TestOvirtMCPSnapshotOperations:
 
     @patch("ovirt_engine_mcp_server.ovirt_mcp.Connection")
     def test_delete_snapshot(self, mock_conn_class, mock_config):
-        """测试删除快照"""
+        """Test snapshot deletion."""
         from ovirt_engine_mcp_server.ovirt_mcp import OvirtMCP
 
         mock_vm = _create_mock_vm()
@@ -518,7 +518,7 @@ class TestOvirtMCPDiskOperations:
 
     @patch("ovirt_engine_mcp_server.ovirt_mcp.Connection")
     def test_attach_disk(self, mock_conn_class, mock_config):
-        """测试附加磁盘"""
+        """Test disk attachment."""
         from ovirt_engine_mcp_server.ovirt_mcp import OvirtMCP
 
         mock_vm = _create_mock_vm()
@@ -546,7 +546,7 @@ class TestOvirtMCPNetworkOperations:
 
     @patch("ovirt_engine_mcp_server.ovirt_mcp.Connection")
     def test_list_networks(self, mock_conn_class, mock_config):
-        """测试列出网络"""
+        """Test listing networks."""
         from ovirt_engine_mcp_server.ovirt_mcp import OvirtMCP
 
         mock_network = MagicMock()
@@ -576,7 +576,7 @@ class TestOvirtMCPNetworkOperations:
 
     @patch("ovirt_engine_mcp_server.ovirt_mcp.Connection")
     def test_get_network(self, mock_conn_class, mock_config):
-        """测试获取网络详情"""
+        """Test getting network details."""
         from ovirt_engine_mcp_server.ovirt_mcp import OvirtMCP
 
         mock_network = MagicMock()
@@ -610,7 +610,7 @@ class TestOvirtMCPNetworkOperations:
 
     @patch("ovirt_engine_mcp_server.ovirt_mcp.Connection")
     def test_create_network(self, mock_conn_class, mock_config):
-        """测试创建网络"""
+        """Test network creation."""
         from ovirt_engine_mcp_server.ovirt_mcp import OvirtMCP
 
         mock_network = MagicMock()
@@ -653,7 +653,7 @@ class TestOvirtMCPHostOperations:
 
     @patch("ovirt_engine_mcp_server.ovirt_mcp.Connection")
     def test_list_hosts_with_data(self, mock_conn_class, mock_config):
-        """测试列出主机"""
+        """Test listing hosts."""
         from ovirt_engine_mcp_server.ovirt_mcp import OvirtMCP
 
         mock_host = MagicMock()
@@ -693,7 +693,7 @@ class TestOvirtMCPBackupOperations:
 
     @patch("ovirt_engine_mcp_server.ovirt_mcp.Connection")
     def test_create_backup_stub(self, mock_conn_class, mock_config):
-        """测试创建备份（存根实现）"""
+        """Test backup creation (stub implementation)."""
         from ovirt_engine_mcp_server.ovirt_mcp import OvirtMCP
 
         mock_vm = _create_mock_vm()
@@ -703,7 +703,7 @@ class TestOvirtMCPBackupOperations:
         mock_vms_service = MagicMock()
         mock_vms_service.list.return_value = [mock_vm]
         mock_vms_service.vm_service.return_value.get.return_value = mock_vm
-        # 不支持备份 API
+        # Backup API not supported
         mock_vms_service.vm_service.return_value.backups_service.side_effect = AttributeError
 
         mock_conn.system_service.return_value.vms_service.return_value = mock_vms_service
@@ -714,11 +714,11 @@ class TestOvirtMCPBackupOperations:
         result = mcp.create_backup("test-vm", backup_type="full")
 
         assert result["success"] is True
-        assert result["stub"] is True  # 使用存根实现
+        assert result["stub"] is True  # stub implementation is used
 
     @patch("ovirt_engine_mcp_server.ovirt_mcp.Connection")
     def test_restore_backup_stub(self, mock_conn_class, mock_config):
-        """测试恢复备份（存根实现）"""
+        """Test backup restore (stub implementation)."""
         from ovirt_engine_mcp_server.ovirt_mcp import OvirtMCP
 
         mock_vm = _create_mock_vm()
@@ -1064,7 +1064,7 @@ class TestRenameVM:
         result = mcp.rename_vm("test-vm", "test-vm")
 
         assert result["success"] is True
-        assert "未变" in result["message"]
+        assert "unchanged" in result["message"]
         vms_service.vm_service.return_value.update.assert_not_called()
 
     @patch("ovirt_engine_mcp_server.ovirt_mcp.Connection")

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-oVirt MCP Server - 系统管理模块
-提供系统信息、选项、任务管理等系统级功能
+oVirt MCP Server - system module
+Provides system information, options, job management, and other system-level features
 """
 from typing import Dict, List, Any, Optional
 import logging
@@ -18,23 +18,23 @@ logger = logging.getLogger(__name__)
 
 
 class SystemMCP(BaseMCP):
-    """系统管理 MCP"""
+    """System MCP"""
 
     def __init__(self, ovirt_mcp):
         super().__init__(ovirt_mcp)
 
     @require_connection
     def get_system_info(self) -> Dict[str, Any]:
-        """获取系统信息
+        """Get system information
 
         Returns:
-            系统信息
+            System information
         """
         try:
             system_service = self.connection.system_service()
             api = system_service.get()
 
-            # 获取版本信息
+            # Get version info
             version = {
                 "major": api.product_info.version.major if api.product_info and api.product_info.version else 0,
                 "minor": api.product_info.version.minor if api.product_info and api.product_info.version else 0,
@@ -43,7 +43,7 @@ class SystemMCP(BaseMCP):
                 "full_version": f"{api.product_info.version.major}.{api.product_info.version.minor}.{api.product_info.version.build}" if api.product_info and api.product_info.version else "unknown",
             }
 
-            # 获取统计信息
+            # Get statistics
             summary = {}
             try:
                 summary_response = system_service.get_summary()
@@ -66,7 +66,7 @@ class SystemMCP(BaseMCP):
                         },
                     }
             except Exception as e:
-                logger.debug(f"获取统计信息失败: {e}")
+                logger.debug(f"Failed to fetch statistics: {e}")
 
             return {
                 "product_name": api.product_info.name if api.product_info else "",
@@ -80,17 +80,17 @@ class SystemMCP(BaseMCP):
                 },
             }
         except Exception as e:
-            raise RuntimeError(f"获取系统信息失败: {e}")
+            raise RuntimeError(f"Failed to get system information: {e}")
 
     @require_connection
     def list_system_options(self, category: str = None) -> List[Dict]:
-        """列出系统选项
+        """List system options
 
         Args:
-            category: 选项分类（可选）
+            category: Option category (optional)
 
         Returns:
-            系统选项列表
+            List of system options
         """
         try:
             system_service = self.connection.system_service()
@@ -102,7 +102,7 @@ class SystemMCP(BaseMCP):
                 options = options_service.list()
 
         except Exception as e:
-            logger.error(f"获取系统选项失败: {e}")
+            logger.error(f"Failed to fetch system options: {e}")
             return []
 
         return [
@@ -116,29 +116,29 @@ class SystemMCP(BaseMCP):
             for o in options
         ]
 
-    # ── 任务管理 ────────────────────────────────────────────────────────────
+    # -- Job management ------------------------------------------------------------
 
     @require_connection
     def list_jobs(self, page: int = 1, page_size: int = 50) -> List[Dict]:
-        """列出任务
+        """List jobs
 
         Args:
-            page: 页码
-            page_size: 每页数量
+            page: Page number
+            page_size: Items per page
 
         Returns:
-            任务列表
+            List of jobs
         """
         try:
             jobs_service = self.connection.system_service().jobs_service()
             jobs = jobs_service.list(max=page * page_size)
 
-            # 分页
+            # Pagination
             start_idx = (page - 1) * page_size
             jobs = jobs[start_idx:start_idx + page_size]
 
         except Exception as e:
-            logger.error(f"获取任务列表失败: {e}")
+            logger.error(f"Failed to fetch job list: {e}")
             return []
 
         return [
@@ -157,19 +157,19 @@ class SystemMCP(BaseMCP):
 
     @require_connection
     def get_job(self, job_id: str) -> Optional[Dict]:
-        """获取任务详情
+        """Get job details
 
         Args:
-            job_id: 任务 ID
+            job_id: Job ID
 
         Returns:
-            任务详情
+            Job details
         """
         try:
             jobs_service = self.connection.system_service().jobs_service()
             job = jobs_service.job_service(job_id).get()
 
-            # 获取任务步骤
+            # Get job steps
             steps = []
             try:
                 steps_service = jobs_service.job_service(job_id).steps_service()
@@ -187,7 +187,7 @@ class SystemMCP(BaseMCP):
                     for s in step_list
                 ]
             except Exception as e:
-                logger.debug(f"获取任务步骤失败: {e}")
+                logger.debug(f"Failed to fetch job steps: {e}")
 
             return {
                 "id": job.id,
@@ -205,19 +205,19 @@ class SystemMCP(BaseMCP):
                 "step_count": len(steps),
             }
         except Exception as e:
-            logger.debug(f"获取任务失败: {e}")
+            logger.debug(f"Failed to fetch job: {e}")
             return None
 
     @require_connection
     def cancel_job(self, job_id: str, force: bool = False) -> Dict[str, Any]:
-        """取消任务
+        """Cancel a job
 
         Args:
-            job_id: 任务 ID
-            force: 强制取消
+            job_id: Job ID
+            force: Force cancellation
 
         Returns:
-            取消结果
+            Cancellation result
         """
         try:
             jobs_service = self.connection.system_service().jobs_service()
@@ -227,20 +227,20 @@ class SystemMCP(BaseMCP):
 
             return {
                 "success": True,
-                "message": f"任务 {job_id} 已取消",
+                "message": f"Job {job_id} cancelled",
                 "job_id": job_id,
             }
         except Exception as e:
-            raise RuntimeError(f"取消任务失败: {e}")
+            raise RuntimeError(f"Failed to cancel job: {e}")
 
-    # ── 系统统计 ────────────────────────────────────────────────────────────
+    # -- System statistics ------------------------------------------------------------
 
     @require_connection
     def get_system_statistics(self) -> Dict[str, Any]:
-        """获取系统统计信息
+        """Get system statistics
 
         Returns:
-            系统统计信息
+            System statistics
         """
         try:
             system_service = self.connection.system_service()
@@ -279,16 +279,16 @@ class SystemMCP(BaseMCP):
                 "total_stats": len(stats),
             }
         except Exception as e:
-            logger.error(f"获取系统统计失败: {e}")
+            logger.error(f"Failed to fetch system statistics: {e}")
             return {"statistics": {}, "error": str(e)}
 
 
-# MCP 工具注册表
+# MCP tool registry
 MCP_TOOLS = {
-    "system_get": {"method": "get_system_info", "description": "获取系统信息"},
-    "system_option_list": {"method": "list_system_options", "description": "列出系统选项"},
-    "job_list": {"method": "list_jobs", "description": "列出任务"},
-    "job_get": {"method": "get_job", "description": "获取任务详情"},
-    "job_cancel": {"method": "cancel_job", "description": "取消任务"},
-    "system_statistics": {"method": "get_system_statistics", "description": "获取系统统计信息"},
+    "system_get": {"method": "get_system_info", "description": "Get system information"},
+    "system_option_list": {"method": "list_system_options", "description": "List system options"},
+    "job_list": {"method": "list_jobs", "description": "List jobs"},
+    "job_get": {"method": "get_job", "description": "Get job details"},
+    "job_cancel": {"method": "cancel_job", "description": "Cancel job"},
+    "system_statistics": {"method": "get_system_statistics", "description": "Get system statistics"},
 }

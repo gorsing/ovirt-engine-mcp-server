@@ -24,42 +24,42 @@ class OvirtMCPError(Exception):
 class OvirtConnectionError(OvirtMCPError):
     """Failed to connect to oVirt Engine."""
 
-    def __init__(self, message: str = "无法连接到 oVirt Engine"):
+    def __init__(self, message: str = "Failed to connect to oVirt Engine"):
         super().__init__(message, code="CONNECTION_ERROR", retryable=True)
 
 
 class NotFoundError(OvirtMCPError):
     """Requested resource not found."""
 
-    def __init__(self, message: str = "未找到请求的资源"):
+    def __init__(self, message: str = "Requested resource not found"):
         super().__init__(message, code="NOT_FOUND", retryable=False)
 
 
 class OvirtPermissionError(OvirtMCPError):
     """Permission denied."""
 
-    def __init__(self, message: str = "权限不足"):
+    def __init__(self, message: str = "Permission denied"):
         super().__init__(message, code="PERMISSION_DENIED", retryable=False)
 
 
 class ValidationError(OvirtMCPError):
     """Input validation failed."""
 
-    def __init__(self, message: str = "参数验证失败"):
+    def __init__(self, message: str = "Input validation failed"):
         super().__init__(message, code="VALIDATION_ERROR", retryable=False)
 
 
 class OvirtTimeoutError(OvirtMCPError):
     """Operation timed out."""
 
-    def __init__(self, message: str = "操作超时"):
+    def __init__(self, message: str = "Operation timed out"):
         super().__init__(message, code="TIMEOUT", retryable=True)
 
 
 class SDKError(OvirtMCPError):
     """oVirt SDK error."""
 
-    def __init__(self, message: str = "oVirt SDK 错误"):
+    def __init__(self, message: str = "oVirt SDK error"):
         super().__init__(message, code="SDK_ERROR", retryable=True)
 
 

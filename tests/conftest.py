@@ -4,7 +4,7 @@ import sys
 import pytest
 from unittest.mock import MagicMock
 
-# 在任何导入之前 mock ovirtsdk4 模块
+# Mock the ovirtsdk4 module before any imports
 mock_sdk = MagicMock()
 mock_sdk.types = MagicMock()
 mock_sdk.types.Vm = MagicMock
@@ -49,7 +49,7 @@ mock_sdk.types.Version = MagicMock
 mock_connection = MagicMock()
 mock_sdk.Connection = mock_connection
 
-# 注册 mock 模块
+# Register mock modules
 sys.modules['ovirtsdk4'] = mock_sdk
 sys.modules['ovirtsdk4.types'] = mock_sdk.types
 

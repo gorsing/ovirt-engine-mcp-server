@@ -1,35 +1,35 @@
 #!/usr/bin/env python3
-"""Tests for healthcheck module - 健康检查模块测试."""
+"""Tests for healthcheck module - healthcheck tests."""
 import pytest
 from unittest.mock import MagicMock, patch
 import sys
 
 
 class TestCheckOvirtConnection:
-    """测试 check_ovirt_connection 函数"""
+    """Tests for the check_ovirt_connection function"""
 
     def test_missing_url(self):
-        """测试缺少 URL 配置"""
-        # 使用 patch 在模块级别 mock
+        """Test missing URL config"""
+        # Patch at module level
         with patch.dict(sys.modules, {'ovirtsdk4': MagicMock()}):
             from ovirt_engine_mcp_server.healthcheck import check_ovirt_connection
             from ovirt_engine_mcp_server.config import Config
 
-            config = Config()  # 空 URL
+            config = Config()  # empty URL
 
             result = check_ovirt_connection(config)
 
             assert result is False
 
     def test_missing_user(self):
-        """测试缺少用户配置"""
+        """Test missing user config"""
         with patch.dict(sys.modules, {'ovirtsdk4': MagicMock()}):
             from ovirt_engine_mcp_server.healthcheck import check_ovirt_connection
             from ovirt_engine_mcp_server.config import Config
 
             config = Config(
                 ovirt_engine_url="https://ovirt.test",
-                # 缺少用户
+                # Missing user
             )
 
             result = check_ovirt_connection(config)
@@ -37,7 +37,7 @@ class TestCheckOvirtConnection:
             assert result is False
 
     def test_missing_password(self):
-        """测试缺少密码配置"""
+        """Test missing password config"""
         with patch.dict(sys.modules, {'ovirtsdk4': MagicMock()}):
             from ovirt_engine_mcp_server.healthcheck import check_ovirt_connection
             from ovirt_engine_mcp_server.config import Config
@@ -45,7 +45,7 @@ class TestCheckOvirtConnection:
             config = Config(
                 ovirt_engine_url="https://ovirt.test",
                 ovirt_engine_user="admin@internal",
-                # 缺少密码
+                # Missing password
             )
 
             result = check_ovirt_connection(config)
@@ -54,13 +54,13 @@ class TestCheckOvirtConnection:
 
 
 class TestHealthcheckMain:
-    """测试 main 函数"""
+    """Tests for the main function"""
 
     @patch.dict(sys.modules, {'ovirtsdk4': MagicMock()})
     @patch("ovirt_engine_mcp_server.healthcheck.load_config")
     @patch("ovirt_engine_mcp_server.healthcheck.check_ovirt_connection")
     def test_main_success(self, mock_check, mock_load_config):
-        """测试 main 函数成功"""
+        """Test main function success"""
         from ovirt_engine_mcp_server.healthcheck import main
         from ovirt_engine_mcp_server.config import Config
 
@@ -72,7 +72,7 @@ class TestHealthcheckMain:
         mock_load_config.return_value = mock_config
         mock_check.return_value = True
 
-        # main() 成功时会调用 sys.exit(0)
+        # main() calls sys.exit(0) on success
         with pytest.raises(SystemExit) as exc_info:
             main()
 
@@ -81,7 +81,7 @@ class TestHealthcheckMain:
     @patch.dict(sys.modules, {'ovirtsdk4': MagicMock()})
     @patch("ovirt_engine_mcp_server.healthcheck.load_config")
     def test_main_config_error(self, mock_load_config):
-        """测试 main 函数配置错误"""
+        """Test main function config error"""
         from ovirt_engine_mcp_server.healthcheck import main
 
         mock_load_config.side_effect = Exception("Config error")
@@ -95,7 +95,7 @@ class TestHealthcheckMain:
     @patch("ovirt_engine_mcp_server.healthcheck.load_config")
     @patch("ovirt_engine_mcp_server.healthcheck.check_ovirt_connection")
     def test_main_connection_failed(self, mock_check, mock_load_config):
-        """测试 main 函数连接失败"""
+        """Test main function connection failure"""
         from ovirt_engine_mcp_server.healthcheck import main
         from ovirt_engine_mcp_server.config import Config
 
@@ -114,12 +114,12 @@ class TestHealthcheckMain:
 
 
 class TestHealthcheckModuleImport:
-    """测试模块导入"""
+    """Tests for module import"""
 
     def test_import_success(self):
-        """测试模块导入成功"""
+        """Test successful module import"""
         with patch.dict(sys.modules, {'ovirtsdk4': MagicMock()}):
-            # 应该能够成功导入
+            # Should import successfully
             from ovirt_engine_mcp_server import healthcheck
 
             assert hasattr(healthcheck, "check_ovirt_connection")

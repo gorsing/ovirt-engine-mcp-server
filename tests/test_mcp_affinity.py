@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Tests for AffinityMCP class - 亲和性组管理模块测试."""
+"""Tests for AffinityMCP class - affinity group management module tests."""
 import pytest
 from unittest.mock import MagicMock
 
 
 def _create_mock_cluster(cluster_id="cluster-123", name="Default"):
-    """创建 mock Cluster 对象"""
+    """Create a mock Cluster object"""
     mock_cluster = MagicMock()
     mock_cluster.id = cluster_id
     mock_cluster.name = name
@@ -13,7 +13,7 @@ def _create_mock_cluster(cluster_id="cluster-123", name="Default"):
 
 
 def _create_mock_affinity_group(group_id="ag-123", name="web-servers", positive=True, enforcing=False):
-    """创建 mock AffinityGroup 对象"""
+    """Create a mock AffinityGroup object"""
     mock_group = MagicMock()
     mock_group.id = group_id
     mock_group.name = name
@@ -24,7 +24,7 @@ def _create_mock_affinity_group(group_id="ag-123", name="web-servers", positive=
 
 
 def _create_mock_vm(vm_id="vm-123", name="test-vm"):
-    """创建 mock VM 对象"""
+    """Create a mock VM object"""
     mock_vm = MagicMock()
     mock_vm.id = vm_id
     mock_vm.name = name
@@ -32,10 +32,10 @@ def _create_mock_vm(vm_id="vm-123", name="test-vm"):
 
 
 class TestAffinityMCPListAffinityGroups:
-    """测试 list_affinity_groups 方法"""
+    """Tests for the list_affinity_groups method"""
 
     def test_list_affinity_groups_empty(self):
-        """测试空亲和性组列表"""
+        """Test an empty affinity group list"""
         from ovirt_engine_mcp_server.mcp_affinity import AffinityMCP
 
         mock_cluster = _create_mock_cluster()
@@ -63,7 +63,7 @@ class TestAffinityMCPListAffinityGroups:
         assert result == []
 
     def test_list_affinity_groups_with_data(self):
-        """测试有数据的亲和性组列表"""
+        """Test affinity group list with data"""
         from ovirt_engine_mcp_server.mcp_affinity import AffinityMCP
 
         mock_cluster = _create_mock_cluster()
@@ -97,7 +97,7 @@ class TestAffinityMCPListAffinityGroups:
         assert result[0]["vm_count"] == 1
 
     def test_list_affinity_groups_cluster_not_found(self):
-        """测试集群不存在"""
+        """Test cluster not found"""
         from ovirt_engine_mcp_server.mcp_affinity import AffinityMCP
 
         mock_ovirt = MagicMock()
@@ -111,15 +111,15 @@ class TestAffinityMCPListAffinityGroups:
 
         affinity_mcp = AffinityMCP(mock_ovirt)
 
-        with pytest.raises(ValueError, match="集群不存在"):
+        with pytest.raises(ValueError, match="Cluster not found"):
             affinity_mcp.list_affinity_groups("Nonexistent")
 
 
 class TestAffinityMCPGetAffinityGroup:
-    """测试 get_affinity_group 方法"""
+    """Tests for the get_affinity_group method"""
 
     def test_get_affinity_group_by_id(self):
-        """测试通过 ID 获取亲和性组"""
+        """Test getting an affinity group by ID"""
         from ovirt_engine_mcp_server.mcp_affinity import AffinityMCP
 
         mock_cluster = _create_mock_cluster()
@@ -153,7 +153,7 @@ class TestAffinityMCPGetAffinityGroup:
         assert result["name"] == "web-servers"
 
     def test_get_affinity_group_not_found(self):
-        """测试亲和性组不存在"""
+        """Test affinity group not found"""
         from ovirt_engine_mcp_server.mcp_affinity import AffinityMCP
 
         mock_cluster = _create_mock_cluster()
@@ -186,10 +186,10 @@ class TestAffinityMCPGetAffinityGroup:
 
 
 class TestAffinityMCPCreateAffinityGroup:
-    """测试 create_affinity_group 方法"""
+    """Tests for the create_affinity_group method"""
 
     def test_create_affinity_group_success(self):
-        """测试创建亲和性组成功"""
+        """Test successful affinity group creation"""
         from ovirt_engine_mcp_server.mcp_affinity import AffinityMCP
 
         mock_cluster = _create_mock_cluster()
@@ -203,7 +203,7 @@ class TestAffinityMCPCreateAffinityGroup:
         mock_clusters_service.list.return_value = [mock_cluster]
 
         mock_affinity_groups_service = MagicMock()
-        mock_affinity_groups_service.list.return_value = []  # 名称不冲突
+        mock_affinity_groups_service.list.return_value = []  # no name conflict
         mock_affinity_groups_service.add.return_value = mock_group
 
         mock_cluster_service = MagicMock()
@@ -225,7 +225,7 @@ class TestAffinityMCPCreateAffinityGroup:
         assert result["enforcing"] is True
 
     def test_create_affinity_group_already_exists(self):
-        """测试亲和性组已存在"""
+        """Test affinity group already exists"""
         from ovirt_engine_mcp_server.mcp_affinity import AffinityMCP
 
         mock_cluster = _create_mock_cluster()
@@ -239,7 +239,7 @@ class TestAffinityMCPCreateAffinityGroup:
         mock_clusters_service.list.return_value = [mock_cluster]
 
         mock_affinity_groups_service = MagicMock()
-        mock_affinity_groups_service.list.return_value = [mock_group]  # 名称已存在
+        mock_affinity_groups_service.list.return_value = [mock_group]  # name already exists
 
         mock_cluster_service = MagicMock()
         mock_cluster_service.affinity_groups_service.return_value = mock_affinity_groups_service
@@ -250,15 +250,15 @@ class TestAffinityMCPCreateAffinityGroup:
 
         affinity_mcp = AffinityMCP(mock_ovirt)
 
-        with pytest.raises(ValueError, match="已存在"):
+        with pytest.raises(ValueError, match="already exists"):
             affinity_mcp.create_affinity_group("web-servers", "Default")
 
 
 class TestAffinityMCPUpdateAffinityGroup:
-    """测试 update_affinity_group 方法"""
+    """Tests for the update_affinity_group method"""
 
     def test_update_affinity_group_success(self):
-        """测试更新亲和性组成功"""
+        """Test successful affinity group update"""
         from ovirt_engine_mcp_server.mcp_affinity import AffinityMCP
 
         mock_cluster = _create_mock_cluster()
@@ -296,10 +296,10 @@ class TestAffinityMCPUpdateAffinityGroup:
 
 
 class TestAffinityMCPDeleteAffinityGroup:
-    """测试 delete_affinity_group 方法"""
+    """Tests for the delete_affinity_group method"""
 
     def test_delete_affinity_group_success(self):
-        """测试删除亲和性组成功"""
+        """Test successful affinity group deletion"""
         from ovirt_engine_mcp_server.mcp_affinity import AffinityMCP
 
         mock_cluster = _create_mock_cluster()
@@ -332,10 +332,10 @@ class TestAffinityMCPDeleteAffinityGroup:
 
 
 class TestAffinityMCPAddVMToAffinityGroup:
-    """测试 add_vm_to_affinity_group 方法"""
+    """Tests for the add_vm_to_affinity_group method"""
 
     def test_add_vm_to_affinity_group_success(self):
-        """测试添加 VM 到亲和性组成功"""
+        """Test successfully adding a VM to an affinity group"""
         from ovirt_engine_mcp_server.mcp_affinity import AffinityMCP
 
         mock_cluster = _create_mock_cluster()
@@ -380,10 +380,10 @@ class TestAffinityMCPAddVMToAffinityGroup:
 
 
 class TestAffinityMCPRemoveVMFromAffinityGroup:
-    """测试 remove_vm_from_affinity_group 方法"""
+    """Tests for the remove_vm_from_affinity_group method"""
 
     def test_remove_vm_from_affinity_group_success(self):
-        """测试从亲和性组移除 VM 成功"""
+        """Test successfully removing a VM from an affinity group"""
         from ovirt_engine_mcp_server.mcp_affinity import AffinityMCP
 
         mock_cluster = _create_mock_cluster()
@@ -431,10 +431,10 @@ class TestAffinityMCPRemoveVMFromAffinityGroup:
 
 
 class TestAffinityMCPTools:
-    """测试 MCP_TOOLS 注册表"""
+    """Tests for the MCP_TOOLS registry"""
 
     def test_mcp_tools_defined(self):
-        """测试 MCP 工具注册表已定义"""
+        """Test that the MCP tool registry is defined"""
         from ovirt_engine_mcp_server.mcp_affinity import MCP_TOOLS
 
         expected_tools = [

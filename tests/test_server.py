@@ -14,7 +14,7 @@ def mock_config():
     )
 
 
-# 检查 mcp 模块是否可用
+# Check whether the mcp module is available
 try:
     import mcp
     MCP_AVAILABLE = True
@@ -86,7 +86,7 @@ class TestOvirtMCPServer:
         from ovirt_engine_mcp_server.server import OvirtMCPServer
 
         result = OvirtMCPServer._format_result(None)
-        assert "成功" in result
+        assert "successful" in result
 
     def test_format_result_string(self, mock_conn_class, mock_config):
         from ovirt_engine_mcp_server.server import OvirtMCPServer
@@ -110,8 +110,8 @@ class TestOvirtMCPServer:
         from ovirt_engine_mcp_server.server import OvirtMCPServer
 
         result = OvirtMCPServer._format_result([])
-        assert "没有找到匹配的结果" in result
-        assert "成功" not in result
+        assert "No matching results found" in result
+        assert "successful" not in result
 
 
 class TestToolRegistryConsistency:

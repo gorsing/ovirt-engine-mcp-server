@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-oVirt MCP Server - 数据中心管理模块
-提供数据中心的 CRUD 操作
+oVirt MCP Server - data center management module
+Provides CRUD operations for data centers
 """
 from typing import Dict, List, Any, Optional
 import logging
@@ -19,14 +19,14 @@ logger = logging.getLogger(__name__)
 
 
 class DataCenterMCP(BaseMCP):
-    """数据中心管理 MCP"""
+    """Data center management MCP"""
 
     def __init__(self, ovirt_mcp):
         super().__init__(ovirt_mcp)
 
     @require_connection
     def list_datacenters(self) -> List[Dict]:
-        """列出所有数据中心"""
+        """List all data centers"""
         dcs_service = self.connection.system_service().data_centers_service()
         dcs = dcs_service.list()
 
@@ -48,12 +48,12 @@ class DataCenterMCP(BaseMCP):
 
     @require_connection
     def get_datacenter(self, name_or_id: str) -> Optional[Dict]:
-        """获取数据中心详情"""
+        """Get data center details"""
         dc = self._find_datacenter(name_or_id)
         if not dc:
             return None
 
-        # 获取关联的集群
+        # Get associated clusters
         clusters = []
         try:
             dc_service = self.connection.system_service().data_centers_service().data_center_service(dc.id)
@@ -61,25 +61,25 @@ class DataCenterMCP(BaseMCP):
             cluster_list = clusters_service.list()
             clusters = [{"id": c.id, "name": c.name} for c in cluster_list]
         except Exception as e:
-            logger.debug(f"获取数据中心集群失败: {e}")
+            logger.debug(f"Failed to get data center clusters: {e}")
 
-        # 获取关联的存储域
+        # Get associated storage domains
         storage_domains = []
         try:
             sd_service = dc_service.storage_domains_service()
             sd_list = sd_service.list()
             storage_domains = [{"id": s.id, "name": s.name, "type": str(s.type.value)} for s in sd_list]
         except Exception as e:
-            logger.debug(f"获取数据中心存储域失败: {e}")
+            logger.debug(f"Failed to get data center storage domains: {e}")
 
-        # 获取关联的网络
+        # Get associated networks
         networks = []
         try:
             networks_service = dc_service.networks_service()
             net_list = networks_service.list()
-            networks = [{"id": n.id, "name": n.name} for n in net_list[:10]]  # 限制数量
+            networks = [{"id": n.id, "name": n.name} for n in net_list[:10]]  # Limit the count
         except Exception as e:
-            logger.debug(f"获取数据中心网络失败: {e}")
+            logger.debug(f"Failed to get data center networks: {e}")
 
         return {
             "id": dc.id,
@@ -97,51 +97,51 @@ class DataCenterMCP(BaseMCP):
     @require_connection
     def create_datacenter(self, name: str, storage_type: str = "nfs",
                          description: str = "") -> Dict[str, Any]:
-        """创建数据中心"""
-        # 验证存储类型
+        """Create data center"""
+        # Validate storage type
         valid_types = ["nfs", "fc", "iscsi", "localfs", "posixfs", "glusterfs"]
         if storage_type.lower() not in valid_types:
-            raise ValueError(f"无效的存储类型: {storage_type}，有效值: {valid_types}")
+            raise ValueError(f"Invalid storage type: {storage_type}, valid values: {valid_types}")
 
         dcs_service = self.connection.system_service().data_centers_service()
 
-        # 检查是否已存在
+        # Check whether it already exists
         existing = dcs_service.list(search=f"name={_sanitize_search_value(name)}")
         if existing:
-            raise ValueError(f"数据中心已存在: {name}")
+            raise ValueError(f"Data center already exists: {name}")
 
-        # 创建数据中心
+        # Create the data center
         try:
             dc = dcs_service.add(
                 sdk.types.DataCenter(
                     name=name,
                     description=description,
                     storage_type=sdk.types.StorageType(storage_type.lower()),
-                    version=sdk.types.Version(major=4, minor=7),  # 默认版本
+                    version=sdk.types.Version(major=4, minor=7),  # Default version
                 )
             )
             return {
                 "success": True,
-                "message": f"数据中心 {name} 已创建",
+                "message": f"Data center {name} created",
                 "datacenter_id": dc.id,
             }
         except Exception as e:
-            raise RuntimeError(f"创建数据中心失败: {e}")
+            raise RuntimeError(f"Failed to create data center: {e}")
 
     @require_connection
     def update_datacenter(self, name_or_id: str, new_name: str = None,
                          description: str = None) -> Dict[str, Any]:
-        """更新数据中心"""
+        """Update data center"""
         dc = self._find_datacenter(name_or_id)
         if not dc:
-            raise ValueError(f"数据中心不存在: {name_or_id}")
+            raise ValueError(f"Data center not found: {name_or_id}")
 
         dc_service = self.connection.system_service().data_centers_service().data_center_service(dc.id)
 
-        # 获取当前数据中心信息
+        # Get current data center information
         current_dc = dc_service.get()
 
-        # 更新属性
+        # Update attributes
         if new_name:
             current_dc.name = new_name
         if description is not None:
@@ -149,31 +149,31 @@ class DataCenterMCP(BaseMCP):
 
         try:
             dc_service.update(current_dc)
-            return {"success": True, "message": f"数据中心已更新"}
+            return {"success": True, "message": f"Data center updated"}
         except Exception as e:
-            raise RuntimeError(f"更新数据中心失败: {e}")
+            raise RuntimeError(f"Failed to update data center: {e}")
 
     @require_connection
     def delete_datacenter(self, name_or_id: str) -> Dict[str, Any]:
-        """删除数据中心"""
+        """Delete data center"""
         dc = self._find_datacenter(name_or_id)
         if not dc:
-            raise ValueError(f"数据中心不存在: {name_or_id}")
+            raise ValueError(f"Data center not found: {name_or_id}")
 
         dc_service = self.connection.system_service().data_centers_service().data_center_service(dc.id)
 
         try:
             dc_service.remove()
-            return {"success": True, "message": f"数据中心 {dc.name} 已删除"}
+            return {"success": True, "message": f"Data center {dc.name} deleted"}
         except Exception as e:
-            raise RuntimeError(f"删除数据中心失败: {e}")
+            raise RuntimeError(f"Failed to delete data center: {e}")
 
 
-# MCP 工具注册表
+# MCP tool registry
 MCP_TOOLS = {
-    "datacenter_list": {"method": "list_datacenters", "description": "列出数据中心"},
-    "datacenter_get": {"method": "get_datacenter", "description": "获取数据中心详情"},
-    "datacenter_create": {"method": "create_datacenter", "description": "创建数据中心"},
-    "datacenter_update": {"method": "update_datacenter", "description": "更新数据中心"},
-    "datacenter_delete": {"method": "delete_datacenter", "description": "删除数据中心"},
+    "datacenter_list": {"method": "list_datacenters", "description": "List data centers"},
+    "datacenter_get": {"method": "get_datacenter", "description": "Get data center details"},
+    "datacenter_create": {"method": "create_datacenter", "description": "Create data center"},
+    "datacenter_update": {"method": "update_datacenter", "description": "Update data center"},
+    "datacenter_delete": {"method": "delete_datacenter", "description": "Delete data center"},
 }

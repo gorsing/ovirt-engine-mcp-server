@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-oVirt MCP Server - VM 扩展模块
-提供 VM 迁移、控制台、CDROM、主机设备、NUMA、Watchdog、会话、VM池、检查点等高级管理功能
+oVirt MCP Server - VM extensions module
+Provides VM migration, console, CD-ROM, host device, NUMA, watchdog, session, VM pool, checkpoint and other advanced management features
 """
 from typing import Dict, List, Any, Optional
 import logging
@@ -19,83 +19,83 @@ logger = logging.getLogger(__name__)
 
 
 class VmExtendedMCP(BaseMCP):
-    """VM 扩展管理 MCP"""
+    """VM extended management MCP"""
 
     def __init__(self, ovirt_mcp):
         super().__init__(ovirt_mcp)
 
-    # ── VM 迁移 ──────────────────────────────────────────────────────────────
+    # -- VM migration --------------------------------------------------------------
 
     @require_connection
     def migrate_vm(self, name_or_id: str, target_host: str = None) -> Dict[str, Any]:
-        """迁移虚拟机到另一台主机
+        """Migrate a VM to another host
 
         Args:
-            name_or_id: VM 名称或 ID
-            target_host: 目标主机名称或 ID（可选，不指定则自动选择）
+            name_or_id: VM name or ID
+            target_host: Target host name or ID (optional, auto-selected if omitted)
 
         Returns:
-            迁移结果
+            Migration result
         """
         vm = self._find_vm(name_or_id)
         if not vm:
-            raise ValueError(f"VM 不存在: {name_or_id}")
+            raise ValueError(f"VM not found: {name_or_id}")
 
         vm_service = self.connection.system_service().vms_service().vm_service(vm.id)
 
-        # 构建迁移参数
+        # Build migration parameters
         host_ref = None
         if target_host:
             host = self._find_host(target_host)
             if not host:
-                raise ValueError(f"目标主机不存在: {target_host}")
+                raise ValueError(f"Target host not found: {target_host}")
             host_ref = sdk.types.Host(id=host.id)
 
         try:
             vm_service.migrate(host=host_ref)
             return {
                 "success": True,
-                "message": f"VM {vm.name} 正在迁移" + (f" 到主机 {target_host}" if target_host else ""),
+                "message": f"VM {vm.name} is migrating" + (f" to host {target_host}" if target_host else ""),
                 "vm_id": vm.id,
                 "target_host": target_host,
             }
         except Exception as e:
-            raise RuntimeError(f"迁移 VM 失败: {e}")
+            raise RuntimeError(f"Failed to migrate VM: {e}")
 
-    # ── VM 控制台 ────────────────────────────────────────────────────────────
+    # -- VM console ------------------------------------------------------------
 
     @require_connection
     def get_vm_console(self, name_or_id: str, console_type: str = "spice") -> Dict[str, Any]:
-        """获取虚拟机控制台访问信息
+        """Get VM console access information
 
         Args:
-            name_or_id: VM 名称或 ID
-            console_type: 控制台类型（spice/vnc），默认 spice
+            name_or_id: VM name or ID
+            console_type: Console type (spice/vnc), defaults to spice
 
         Returns:
-            控制台连接信息
+            Console connection information
         """
         vm = self._find_vm(name_or_id)
         if not vm:
-            raise ValueError(f"VM 不存在: {name_or_id}")
+            raise ValueError(f"VM not found: {name_or_id}")
 
         vm_service = self.connection.system_service().vms_service().vm_service(vm.id)
 
-        # 获取图形控制台
+        # Get graphical consoles
         consoles = []
         try:
             graphics_consoles_service = vm_service.graphics_consoles_service()
             console_list = graphics_consoles_service.list()
 
             for console in console_list:
-                # 获取控制台票据
+                # Get console ticket
                 ticket = None
                 try:
                     console_service = graphics_consoles_service.console_service(console.id)
                     ticket_response = console_service.ticket()
                     ticket = ticket_response.value if ticket_response else None
                 except Exception as e:
-                    logger.debug(f"获取控制台票据失败: {e}")
+                    logger.debug(f"Failed to get console ticket: {e}")
 
                 consoles.append({
                     "id": console.id,
@@ -106,9 +106,9 @@ class VmExtendedMCP(BaseMCP):
                     "ticket": ticket,
                 })
         except Exception as e:
-            logger.error(f"获取控制台失败: {e}")
+            logger.error(f"Failed to get consoles: {e}")
 
-        # 过滤指定类型
+        # Filter by type
         if console_type:
             consoles = [c for c in consoles if c["protocol"].lower() == console_type.lower()]
 
@@ -119,21 +119,21 @@ class VmExtendedMCP(BaseMCP):
             "console_count": len(consoles),
         }
 
-    # ── CDROM 管理 ────────────────────────────────────────────────────────────
+    # -- CD-ROM management ------------------------------------------------------------
 
     @require_connection
     def list_vm_cdroms(self, name_or_id: str) -> List[Dict]:
-        """列出 VM 的 CDROM 设备
+        """List VM CD-ROM devices
 
         Args:
-            name_or_id: VM 名称或 ID
+            name_or_id: VM name or ID
 
         Returns:
-            CDROM 列表
+            CD-ROM list
         """
         vm = self._find_vm(name_or_id)
         if not vm:
-            raise ValueError(f"VM 不存在: {name_or_id}")
+            raise ValueError(f"VM not found: {name_or_id}")
 
         vm_service = self.connection.system_service().vms_service().vm_service(vm.id)
         cdroms_service = vm_service.cdroms_service()
@@ -141,7 +141,7 @@ class VmExtendedMCP(BaseMCP):
         try:
             cdroms = cdroms_service.list()
         except Exception as e:
-            logger.error(f"获取 CDROM 列表失败: {e}")
+            logger.error(f"Failed to get CD-ROM list: {e}")
             return []
 
         result = []
@@ -157,29 +157,29 @@ class VmExtendedMCP(BaseMCP):
     @require_connection
     def update_vm_cdrom(self, name_or_id: str, cdrom_id: str,
                        iso_file: str = None, eject: bool = False) -> Dict[str, Any]:
-        """更新 VM 的 CDROM（挂载/弹出 ISO）
+        """Update VM CD-ROM (mount/eject ISO)
 
         Args:
-            name_or_id: VM 名称或 ID
+            name_or_id: VM name or ID
             cdrom_id: CDROM ID
-            iso_file: ISO 文件路径（可选）
-            eject: 是否弹出光盘
+            iso_file: ISO file path (optional)
+            eject: Whether to eject the disc
 
         Returns:
-            更新结果
+            Update result
         """
         vm = self._find_vm(name_or_id)
         if not vm:
-            raise ValueError(f"VM 不存在: {name_or_id}")
+            raise ValueError(f"VM not found: {name_or_id}")
 
         vm_service = self.connection.system_service().vms_service().vm_service(vm.id)
         cdroms_service = vm_service.cdroms_service()
         cdrom_service = cdroms_service.cdrom_service(cdrom_id)
 
-        # 获取当前 CDROM
+        # Get current CD-ROM
         cdrom = cdrom_service.get()
 
-        # 更新文件
+        # Update file
         if eject:
             cdrom.file = None
         elif iso_file:
@@ -189,29 +189,29 @@ class VmExtendedMCP(BaseMCP):
             cdrom_service.update(cdrom)
             return {
                 "success": True,
-                "message": f"CDROM 已更新",
+                "message": f"CD-ROM updated",
                 "vm_id": vm.id,
                 "cdrom_id": cdrom_id,
                 "iso_file": iso_file if not eject else "ejected",
             }
         except Exception as e:
-            raise RuntimeError(f"更新 CDROM 失败: {e}")
+            raise RuntimeError(f"Failed to update CD-ROM: {e}")
 
-    # ── 主机设备管理 ──────────────────────────────────────────────────────────
+    # -- Host device management ----------------------------------------------------------
 
     @require_connection
     def list_vm_host_devices(self, name_or_id: str) -> List[Dict]:
-        """列出 VM 的主机设备
+        """List VM host devices
 
         Args:
-            name_or_id: VM 名称或 ID
+            name_or_id: VM name or ID
 
         Returns:
-            主机设备列表
+            List of host devices
         """
         vm = self._find_vm(name_or_id)
         if not vm:
-            raise ValueError(f"VM 不存在: {name_or_id}")
+            raise ValueError(f"VM not found: {name_or_id}")
 
         vm_service = self.connection.system_service().vms_service().vm_service(vm.id)
         host_devices_service = vm_service.host_devices_service()
@@ -219,7 +219,7 @@ class VmExtendedMCP(BaseMCP):
         try:
             devices = host_devices_service.list()
         except Exception as e:
-            logger.error(f"获取主机设备列表失败: {e}")
+            logger.error(f"Failed to get host device list: {e}")
             return []
 
         return [
@@ -235,30 +235,30 @@ class VmExtendedMCP(BaseMCP):
 
     @require_connection
     def attach_vm_host_device(self, name_or_id: str, device_name: str) -> Dict[str, Any]:
-        """将主机设备附加到 VM
+        """Attach a host device to the VM
 
         Args:
-            name_or_id: VM 名称或 ID
-            device_name: 设备名称
+            name_or_id: VM name or ID
+            device_name: Device name
 
         Returns:
-            附加结果
+            Attach result
         """
         vm = self._find_vm(name_or_id)
         if not vm:
-            raise ValueError(f"VM 不存在: {name_or_id}")
+            raise ValueError(f"VM not found: {name_or_id}")
 
-        # 获取 VM 所在主机的设备
+        # Get devices from the VM's host
         if not vm.host:
-            raise ValueError("VM 未运行在主机上，无法附加设备")
+            raise ValueError("VM is not running on a host; cannot attach device")
 
         host_service = self.connection.system_service().hosts_service().host_service(vm.host.id)
         devices_service = host_service.devices_service()
 
-        # 查找设备
+        # Find device
         devices = devices_service.list(search=f"name={_sanitize_search_value(device_name)}")
         if not devices:
-            raise ValueError(f"设备不存在: {device_name}")
+            raise ValueError(f"Device not found: {device_name}")
 
         device = devices[0]
 
@@ -271,32 +271,32 @@ class VmExtendedMCP(BaseMCP):
             )
             return {
                 "success": True,
-                "message": f"设备 {device_name} 已附加到 VM",
+                "message": f"Device {device_name} attached to VM",
                 "vm_id": vm.id,
                 "device_id": device.id,
             }
         except Exception as e:
-            raise RuntimeError(f"附加设备失败: {e}")
+            raise RuntimeError(f"Failed to attach device: {e}")
 
     @require_connection
     def detach_vm_host_device(self, name_or_id: str, device_name: str) -> Dict[str, Any]:
-        """从 VM 分离主机设备
+        """Detach a host device from the VM
 
         Args:
-            name_or_id: VM 名称或 ID
-            device_name: 设备名称
+            name_or_id: VM name or ID
+            device_name: Device name
 
         Returns:
-            分离结果
+            Detach result
         """
         vm = self._find_vm(name_or_id)
         if not vm:
-            raise ValueError(f"VM 不存在: {name_or_id}")
+            raise ValueError(f"VM not found: {name_or_id}")
 
         vm_service = self.connection.system_service().vms_service().vm_service(vm.id)
         host_devices_service = vm_service.host_devices_service()
 
-        # 查找设备
+        # Find device
         devices = host_devices_service.list()
         device = None
         for d in devices:
@@ -305,7 +305,7 @@ class VmExtendedMCP(BaseMCP):
                 break
 
         if not device:
-            raise ValueError(f"VM 没有附加设备: {device_name}")
+            raise ValueError(f"VM has no attached device: {device_name}")
 
         device_service = host_devices_service.host_device_service(device.id)
 
@@ -313,27 +313,27 @@ class VmExtendedMCP(BaseMCP):
             device_service.remove()
             return {
                 "success": True,
-                "message": f"设备 {device_name} 已从 VM 分离",
+                "message": f"Device {device_name} detached from VM",
                 "vm_id": vm.id,
             }
         except Exception as e:
-            raise RuntimeError(f"分离设备失败: {e}")
+            raise RuntimeError(f"Failed to detach device: {e}")
 
-    # ── 介导设备管理 ──────────────────────────────────────────────────────────
+    # -- Mediated device management ----------------------------------------------------------
 
     @require_connection
     def list_vm_mediated_devices(self, name_or_id: str) -> List[Dict]:
-        """列出 VM 的介导设备（vGPU 等）
+        """List VM mediated devices (vGPU etc.)
 
         Args:
-            name_or_id: VM 名称或 ID
+            name_or_id: VM name or ID
 
         Returns:
-            介导设备列表
+            List of mediated devices
         """
         vm = self._find_vm(name_or_id)
         if not vm:
-            raise ValueError(f"VM 不存在: {name_or_id}")
+            raise ValueError(f"VM not found: {name_or_id}")
 
         vm_service = self.connection.system_service().vms_service().vm_service(vm.id)
         mediated_devices_service = vm_service.mediated_devices_service()
@@ -341,7 +341,7 @@ class VmExtendedMCP(BaseMCP):
         try:
             devices = mediated_devices_service.list()
         except Exception as e:
-            logger.error(f"获取介导设备列表失败: {e}")
+            logger.error(f"Failed to get mediated device list: {e}")
             return []
 
         return [
@@ -354,21 +354,21 @@ class VmExtendedMCP(BaseMCP):
             for d in devices
         ]
 
-    # ── NUMA 管理 ────────────────────────────────────────────────────────────
+    # -- NUMA management ------------------------------------------------------------
 
     @require_connection
     def list_vm_numa_nodes(self, name_or_id: str) -> List[Dict]:
-        """列出 VM 的 NUMA 节点
+        """List VM NUMA nodes
 
         Args:
-            name_or_id: VM 名称或 ID
+            name_or_id: VM name or ID
 
         Returns:
-            NUMA 节点列表
+            List of NUMA nodes
         """
         vm = self._find_vm(name_or_id)
         if not vm:
-            raise ValueError(f"VM 不存在: {name_or_id}")
+            raise ValueError(f"VM not found: {name_or_id}")
 
         vm_service = self.connection.system_service().vms_service().vm_service(vm.id)
         numa_service = vm_service.numa_nodes_service()
@@ -376,7 +376,7 @@ class VmExtendedMCP(BaseMCP):
         try:
             nodes = numa_service.list()
         except Exception as e:
-            logger.error(f"获取 NUMA 节点失败: {e}")
+            logger.error(f"Failed to get NUMA nodes: {e}")
             return []
 
         result = []
@@ -394,21 +394,21 @@ class VmExtendedMCP(BaseMCP):
 
         return result
 
-    # ── Watchdog 管理 ──────────────────────────────────────────────────────────
+    # -- Watchdog management ----------------------------------------------------------
 
     @require_connection
     def list_vm_watchdogs(self, name_or_id: str) -> List[Dict]:
-        """列出 VM 的 Watchdog 设备
+        """List VM watchdog devices
 
         Args:
-            name_or_id: VM 名称或 ID
+            name_or_id: VM name or ID
 
         Returns:
-            Watchdog 列表
+            List of watchdogs
         """
         vm = self._find_vm(name_or_id)
         if not vm:
-            raise ValueError(f"VM 不存在: {name_or_id}")
+            raise ValueError(f"VM not found: {name_or_id}")
 
         vm_service = self.connection.system_service().vms_service().vm_service(vm.id)
         watchdogs_service = vm_service.watchdogs_service()
@@ -416,7 +416,7 @@ class VmExtendedMCP(BaseMCP):
         try:
             watchdogs = watchdogs_service.list()
         except Exception as e:
-            logger.error(f"获取 Watchdog 列表失败: {e}")
+            logger.error(f"Failed to get watchdog list: {e}")
             return []
 
         return [
@@ -431,19 +431,19 @@ class VmExtendedMCP(BaseMCP):
     @require_connection
     def update_vm_watchdog(self, name_or_id: str, watchdog_id: str,
                           action: str = None) -> Dict[str, Any]:
-        """更新 VM 的 Watchdog 配置
+        """Update VM watchdog configuration
 
         Args:
-            name_or_id: VM 名称或 ID
+            name_or_id: VM name or ID
             watchdog_id: Watchdog ID
-            action: 触发动作（none/reset/poweroff/shutdown/dump）
+            action: Action to trigger (none/reset/poweroff/shutdown/dump)
 
         Returns:
-            更新结果
+            Update result
         """
         vm = self._find_vm(name_or_id)
         if not vm:
-            raise ValueError(f"VM 不存在: {name_or_id}")
+            raise ValueError(f"VM not found: {name_or_id}")
 
         vm_service = self.connection.system_service().vms_service().vm_service(vm.id)
         watchdogs_service = vm_service.watchdogs_service()
@@ -454,84 +454,84 @@ class VmExtendedMCP(BaseMCP):
         if action:
             valid_actions = ["none", "reset", "poweroff", "shutdown", "dump"]
             if action.lower() not in valid_actions:
-                raise ValueError(f"无效动作: {action}，有效值: {valid_actions}")
+                raise ValueError(f"Invalid action: {action}, valid values: {valid_actions}")
             watchdog.action = sdk.types.WatchdogAction(action.lower())
 
         try:
             watchdog_service.update(watchdog)
             return {
                 "success": True,
-                "message": f"Watchdog 已更新",
+                "message": f"Watchdog updated",
                 "vm_id": vm.id,
                 "watchdog_id": watchdog_id,
                 "action": action,
             }
         except Exception as e:
-            raise RuntimeError(f"更新 Watchdog 失败: {e}")
+            raise RuntimeError(f"Failed to update watchdog: {e}")
 
-    # ── VM 固定到主机 ──────────────────────────────────────────────────────────
+    # -- VM pin to host ----------------------------------------------------------
 
     @require_connection
     def pin_vm_to_host(self, name_or_id: str, host: str,
                       pin_policy: str = "user") -> Dict[str, Any]:
-        """将 VM 固定到指定主机
+        """Pin a VM to a specific host
 
         Args:
-            name_or_id: VM 名称或 ID
-            host: 主机名称或 ID
-            pin_policy: 固定策略（user/resizable/migratable）
+            name_or_id: VM name or ID
+            host: Host name or ID
+            pin_policy: Pin policy (user/resizable/migratable)
 
         Returns:
-            固定结果
+            Pin result
         """
         vm = self._find_vm(name_or_id)
         if not vm:
-            raise ValueError(f"VM 不存在: {name_or_id}")
+            raise ValueError(f"VM not found: {name_or_id}")
 
         host_obj = self._find_host(host)
         if not host_obj:
-            raise ValueError(f"主机不存在: {host}")
+            raise ValueError(f"Host not found: {host}")
 
         vm_service = self.connection.system_service().vms_service().vm_service(vm.id)
 
-        # 设置固定主机
+        # Set pinned host
         vm_update = sdk.types.Vm(
             host=sdk.types.Host(id=host_obj.id),
         )
 
-        # 设置固定策略（如果有）
+        # Set pin policy (if available)
         if hasattr(sdk.types, 'VmPlacementPolicy'):
             valid_policies = ["user", "resizable", "migratable"]
             if pin_policy.lower() not in valid_policies:
-                raise ValueError(f"无效策略: {pin_policy}，有效值: {valid_policies}")
+                raise ValueError(f"Invalid policy: {pin_policy}, valid values: {valid_policies}")
 
         try:
             vm_service.update(vm_update)
             return {
                 "success": True,
-                "message": f"VM {vm.name} 已固定到主机 {host}",
+                "message": f"VM {vm.name} pinned to host {host}",
                 "vm_id": vm.id,
                 "host_id": host_obj.id,
                 "pin_policy": pin_policy,
             }
         except Exception as e:
-            raise RuntimeError(f"固定 VM 失败: {e}")
+            raise RuntimeError(f"Failed to pin VM: {e}")
 
-    # ── VM 会话管理 ────────────────────────────────────────────────────────────
+    # -- VM session management ------------------------------------------------------------
 
     @require_connection
     def list_vm_sessions(self, name_or_id: str) -> List[Dict]:
-        """列出 VM 的活跃会话
+        """List active VM sessions
 
         Args:
-            name_or_id: VM 名称或 ID
+            name_or_id: VM name or ID
 
         Returns:
-            会话列表
+            List of sessions
         """
         vm = self._find_vm(name_or_id)
         if not vm:
-            raise ValueError(f"VM 不存在: {name_or_id}")
+            raise ValueError(f"VM not found: {name_or_id}")
 
         vm_service = self.connection.system_service().vms_service().vm_service(vm.id)
         sessions_service = vm_service.sessions_service()
@@ -539,7 +539,7 @@ class VmExtendedMCP(BaseMCP):
         try:
             sessions = sessions_service.list()
         except Exception as e:
-            logger.error(f"获取会话列表失败: {e}")
+            logger.error(f"Failed to get session list: {e}")
             return []
 
         return [
@@ -553,17 +553,17 @@ class VmExtendedMCP(BaseMCP):
             for s in sessions
         ]
 
-    # ── VM 池管理 ────────────────────────────────────────────────────────────
+    # -- VM pool management ------------------------------------------------------------
 
     @require_connection
     def list_vm_pools(self, cluster: str = None) -> List[Dict]:
-        """列出虚拟机池
+        """List VM pools
 
         Args:
-            cluster: 集群名称（可选）
+            cluster: Cluster name (optional)
 
         Returns:
-            VM 池列表
+            List of VM pools
         """
         pools_service = self.connection.system_service().vm_pools_service()
 
@@ -574,7 +574,7 @@ class VmExtendedMCP(BaseMCP):
         try:
             pools = pools_service.list(search=search)
         except Exception as e:
-            logger.error(f"获取 VM 池列表失败: {e}")
+            logger.error(f"Failed to get VM pool list: {e}")
             return []
 
         return [
@@ -594,17 +594,17 @@ class VmExtendedMCP(BaseMCP):
 
     @require_connection
     def get_vm_pool(self, name_or_id: str) -> Optional[Dict]:
-        """获取虚拟机池详情
+        """Get VM pool details
 
         Args:
-            name_or_id: VM 池名称或 ID
+            name_or_id: VM pool name or ID
 
         Returns:
-            VM 池详情
+            VM pool details
         """
         pools_service = self.connection.system_service().vm_pools_service()
 
-        # 尝试按 ID 获取
+        # Try to get by ID
         try:
             pool = pools_service.pool_service(name_or_id).get()
             if pool:
@@ -612,7 +612,7 @@ class VmExtendedMCP(BaseMCP):
         except Exception:
             pass
 
-        # 按名称搜索
+        # Search by name
         pools = pools_service.list(search=f"name={_sanitize_search_value(name_or_id)}")
         if not pools:
             return None
@@ -620,7 +620,7 @@ class VmExtendedMCP(BaseMCP):
         return self._format_pool_detail(pools[0])
 
     def _format_pool_detail(self, pool) -> Dict:
-        """格式化池详情"""
+        """Format pool details"""
         return {
             "id": pool.id,
             "name": pool.name,
@@ -644,34 +644,34 @@ class VmExtendedMCP(BaseMCP):
                       size: int = 5, description: str = "",
                       max_user_vms: int = 1, prestarted_vms: int = 0,
                       stateful: bool = False) -> Dict[str, Any]:
-        """创建虚拟机池
+        """Create a VM pool
 
         Args:
-            name: 池名称
-            template: 模板名称
-            cluster: 集群名称
-            size: 池大小，默认 5
-            description: 描述
-            max_user_vms: 每用户最大 VM 数，默认 1
-            prestarted_vms: 预启动 VM 数，默认 0
-            stateful: 是否有状态，默认 False
+            name: Pool name
+            template: Template name
+            cluster: Cluster name
+            size: Pool size, defaults to 5
+            description: Description
+            max_user_vms: Max VMs per user, defaults to 1
+            prestarted_vms: Prestarted VMs, defaults to 0
+            stateful: Whether stateful, defaults to False
 
         Returns:
-            创建结果
+            Creation result
         """
-        # 查找模板
+        # Find template
         templates = self.connection.system_service().templates_service().list(
             search=f"name={_sanitize_search_value(template)}"
         )
         if not templates:
-            raise ValueError(f"模板不存在: {template}")
+            raise ValueError(f"Template not found: {template}")
 
-        # 查找集群
+        # Find cluster
         clusters = self.connection.system_service().clusters_service().list(
             search=f"name={_sanitize_search_value(cluster)}"
         )
         if not clusters:
-            raise ValueError(f"集群不存在: {cluster}")
+            raise ValueError(f"Cluster not found: {cluster}")
 
         pools_service = self.connection.system_service().vm_pools_service()
 
@@ -691,27 +691,27 @@ class VmExtendedMCP(BaseMCP):
 
             return {
                 "success": True,
-                "message": f"VM 池 {name} 已创建",
+                "message": f"VM pool {name} created",
                 "pool_id": pool.id,
                 "size": size,
             }
         except Exception as e:
-            raise RuntimeError(f"创建 VM 池失败: {e}")
+            raise RuntimeError(f"Failed to create VM pool: {e}")
 
     @require_connection
     def delete_vm_pool(self, name_or_id: str, force: bool = False) -> Dict[str, Any]:
-        """删除虚拟机池
+        """Delete a VM pool
 
         Args:
-            name_or_id: VM 池名称或 ID
-            force: 强制删除
+            name_or_id: VM pool name or ID
+            force: Force delete
 
         Returns:
-            删除结果
+            Deletion result
         """
         pools_service = self.connection.system_service().vm_pools_service()
 
-        # 查找池
+        # Find pool
         pool_id = None
         pool_name = None
         try:
@@ -722,7 +722,7 @@ class VmExtendedMCP(BaseMCP):
         except Exception:
             pools = pools_service.list(search=f"name={_sanitize_search_value(name_or_id)}")
             if not pools:
-                raise ValueError(f"VM 池不存在: {name_or_id}")
+                raise ValueError(f"VM pool not found: {name_or_id}")
             pool_id = pools[0].id
             pool_name = pools[0].name
 
@@ -730,29 +730,29 @@ class VmExtendedMCP(BaseMCP):
 
         try:
             pool_service.remove(force=force)
-            return {"success": True, "message": f"VM 池 {pool_name} 已删除"}
+            return {"success": True, "message": f"VM pool {pool_name} deleted"}
         except Exception as e:
-            raise RuntimeError(f"删除 VM 池失败: {e}")
+            raise RuntimeError(f"Failed to delete VM pool: {e}")
 
     @require_connection
     def update_vm_pool(self, name_or_id: str, new_name: str = None,
                       size: int = None, description: str = None,
                       prestarted_vms: int = None) -> Dict[str, Any]:
-        """更新虚拟机池
+        """Update a VM pool
 
         Args:
-            name_or_id: VM 池名称或 ID
-            new_name: 新名称（可选）
-            size: 新大小（可选）
-            description: 新描述（可选）
-            prestarted_vms: 预启动 VM 数（可选）
+            name_or_id: VM pool name or ID
+            new_name: New name (optional)
+            size: New size (optional)
+            description: New description (optional)
+            prestarted_vms: Prestarted VMs (optional)
 
         Returns:
-            更新结果
+            Update result
         """
         pools_service = self.connection.system_service().vm_pools_service()
 
-        # 查找池
+        # Find pool
         pool_id = None
         try:
             pool_service = pools_service.pool_service(name_or_id)
@@ -761,12 +761,12 @@ class VmExtendedMCP(BaseMCP):
         except Exception:
             pools = pools_service.list(search=f"name={_sanitize_search_value(name_or_id)}")
             if not pools:
-                raise ValueError(f"VM 池不存在: {name_or_id}")
+                raise ValueError(f"VM pool not found: {name_or_id}")
             pool_id = pools[0].id
             pool = pools[0]
             pool_service = pools_service.pool_service(pool_id)
 
-        # 更新属性
+        # Update properties
         if new_name:
             pool.name = new_name
         if size is not None:
@@ -778,25 +778,25 @@ class VmExtendedMCP(BaseMCP):
 
         try:
             pool_service.update(pool)
-            return {"success": True, "message": f"VM 池已更新"}
+            return {"success": True, "message": f"VM pool updated"}
         except Exception as e:
-            raise RuntimeError(f"更新 VM 池失败: {e}")
+            raise RuntimeError(f"Failed to update VM pool: {e}")
 
-    # ── VM 检查点管理 ──────────────────────────────────────────────────────────
+    # -- VM checkpoint management ----------------------------------------------------------
 
     @require_connection
     def list_vm_checkpoints(self, name_or_id: str) -> List[Dict]:
-        """列出 VM 的检查点
+        """List VM checkpoints
 
         Args:
-            name_or_id: VM 名称或 ID
+            name_or_id: VM name or ID
 
         Returns:
-            检查点列表
+            List of checkpoints
         """
         vm = self._find_vm(name_or_id)
         if not vm:
-            raise ValueError(f"VM 不存在: {name_or_id}")
+            raise ValueError(f"VM not found: {name_or_id}")
 
         vm_service = self.connection.system_service().vms_service().vm_service(vm.id)
         checkpoints_service = vm_service.checkpoints_service()
@@ -804,7 +804,7 @@ class VmExtendedMCP(BaseMCP):
         try:
             checkpoints = checkpoints_service.list()
         except Exception as e:
-            logger.error(f"获取检查点列表失败: {e}")
+            logger.error(f"Failed to get checkpoint list: {e}")
             return []
 
         return [
@@ -819,18 +819,18 @@ class VmExtendedMCP(BaseMCP):
 
     @require_connection
     def create_vm_checkpoint(self, name_or_id: str, description: str = "") -> Dict[str, Any]:
-        """创建 VM 检查点
+        """Create a VM checkpoint
 
         Args:
-            name_or_id: VM 名称或 ID
-            description: 检查点描述
+            name_or_id: VM name or ID
+            description: Checkpoint description
 
         Returns:
-            创建结果
+            Creation result
         """
         vm = self._find_vm(name_or_id)
         if not vm:
-            raise ValueError(f"VM 不存在: {name_or_id}")
+            raise ValueError(f"VM not found: {name_or_id}")
 
         vm_service = self.connection.system_service().vms_service().vm_service(vm.id)
         checkpoints_service = vm_service.checkpoints_service()
@@ -844,27 +844,27 @@ class VmExtendedMCP(BaseMCP):
 
             return {
                 "success": True,
-                "message": f"检查点已创建",
+                "message": f"Checkpoint created",
                 "vm_id": vm.id,
                 "checkpoint_id": checkpoint.id,
             }
         except Exception as e:
-            raise RuntimeError(f"创建检查点失败: {e}")
+            raise RuntimeError(f"Failed to create checkpoint: {e}")
 
     @require_connection
     def restore_vm_checkpoint(self, name_or_id: str, checkpoint_id: str) -> Dict[str, Any]:
-        """恢复 VM 到检查点
+        """Restore a VM to a checkpoint
 
         Args:
-            name_or_id: VM 名称或 ID
-            checkpoint_id: 检查点 ID
+            name_or_id: VM name or ID
+            checkpoint_id: Checkpoint ID
 
         Returns:
-            恢复结果
+            Restore result
         """
         vm = self._find_vm(name_or_id)
         if not vm:
-            raise ValueError(f"VM 不存在: {name_or_id}")
+            raise ValueError(f"VM not found: {name_or_id}")
 
         vm_service = self.connection.system_service().vms_service().vm_service(vm.id)
         checkpoints_service = vm_service.checkpoints_service()
@@ -874,27 +874,27 @@ class VmExtendedMCP(BaseMCP):
             checkpoint_service.restore()
             return {
                 "success": True,
-                "message": f"VM 已恢复到检查点",
+                "message": f"VM restored to checkpoint",
                 "vm_id": vm.id,
                 "checkpoint_id": checkpoint_id,
             }
         except Exception as e:
-            raise RuntimeError(f"恢复检查点失败: {e}")
+            raise RuntimeError(f"Failed to restore checkpoint: {e}")
 
     @require_connection
     def delete_vm_checkpoint(self, name_or_id: str, checkpoint_id: str) -> Dict[str, Any]:
-        """删除 VM 检查点
+        """Delete a VM checkpoint
 
         Args:
-            name_or_id: VM 名称或 ID
-            checkpoint_id: 检查点 ID
+            name_or_id: VM name or ID
+            checkpoint_id: Checkpoint ID
 
         Returns:
-            删除结果
+            Deletion result
         """
         vm = self._find_vm(name_or_id)
         if not vm:
-            raise ValueError(f"VM 不存在: {name_or_id}")
+            raise ValueError(f"VM not found: {name_or_id}")
 
         vm_service = self.connection.system_service().vms_service().vm_service(vm.id)
         checkpoints_service = vm_service.checkpoints_service()
@@ -904,55 +904,55 @@ class VmExtendedMCP(BaseMCP):
             checkpoint_service.remove()
             return {
                 "success": True,
-                "message": f"检查点已删除",
+                "message": f"Checkpoint deleted",
                 "vm_id": vm.id,
                 "checkpoint_id": checkpoint_id,
             }
         except Exception as e:
-            raise RuntimeError(f"删除检查点失败: {e}")
+            raise RuntimeError(f"Failed to delete checkpoint: {e}")
 
 
-# MCP 工具注册表
+# MCP tool registry
 MCP_TOOLS = {
-    # VM 迁移和控制台
-    "vm_migrate": {"method": "migrate_vm", "description": "迁移虚拟机到另一台主机"},
-    "vm_console": {"method": "get_vm_console", "description": "获取虚拟机控制台访问信息"},
+    # VM migration and console
+    "vm_migrate": {"method": "migrate_vm", "description": "Migrate a VM to another host"},
+    "vm_console": {"method": "get_vm_console", "description": "Get VM console access information"},
 
-    # CDROM 管理
-    "vm_cdrom_list": {"method": "list_vm_cdroms", "description": "列出 VM 的 CDROM 设备"},
-    "vm_cdrom_update": {"method": "update_vm_cdrom", "description": "更新 VM 的 CDROM（挂载/弹出 ISO）"},
+    # CD-ROM management
+    "vm_cdrom_list": {"method": "list_vm_cdroms", "description": "List VM CD-ROM devices"},
+    "vm_cdrom_update": {"method": "update_vm_cdrom", "description": "Update VM CD-ROM (mount/eject ISO)"},
 
-    # 主机设备管理
-    "vm_hostdevice_list": {"method": "list_vm_host_devices", "description": "列出 VM 的主机设备"},
-    "vm_hostdevice_attach": {"method": "attach_vm_host_device", "description": "将主机设备附加到 VM"},
-    "vm_hostdevice_detach": {"method": "detach_vm_host_device", "description": "从 VM 分离主机设备"},
+    # Host device management
+    "vm_hostdevice_list": {"method": "list_vm_host_devices", "description": "List VM host devices"},
+    "vm_hostdevice_attach": {"method": "attach_vm_host_device", "description": "Attach a host device to the VM"},
+    "vm_hostdevice_detach": {"method": "detach_vm_host_device", "description": "Detach a host device from the VM"},
 
-    # 介导设备管理
-    "vm_mediated_device_list": {"method": "list_vm_mediated_devices", "description": "列出 VM 的介导设备（vGPU）"},
+    # Mediated device management
+    "vm_mediated_device_list": {"method": "list_vm_mediated_devices", "description": "List VM mediated devices (vGPU)"},
 
-    # NUMA 管理
-    "vm_numa_list": {"method": "list_vm_numa_nodes", "description": "列出 VM 的 NUMA 节点"},
+    # NUMA management
+    "vm_numa_list": {"method": "list_vm_numa_nodes", "description": "List VM NUMA nodes"},
 
-    # Watchdog 管理
-    "vm_watchdog_list": {"method": "list_vm_watchdogs", "description": "列出 VM 的 Watchdog 设备"},
-    "vm_watchdog_update": {"method": "update_vm_watchdog", "description": "更新 VM 的 Watchdog 配置"},
+    # Watchdog management
+    "vm_watchdog_list": {"method": "list_vm_watchdogs", "description": "List VM watchdog devices"},
+    "vm_watchdog_update": {"method": "update_vm_watchdog", "description": "Update VM watchdog configuration"},
 
-    # VM 固定
-    "vm_pin_to_host": {"method": "pin_vm_to_host", "description": "将 VM 固定到指定主机"},
+    # VM pinning
+    "vm_pin_to_host": {"method": "pin_vm_to_host", "description": "Pin a VM to a specific host"},
 
-    # 会话管理
-    "vm_session_list": {"method": "list_vm_sessions", "description": "列出 VM 的活跃会话"},
+    # Session management
+    "vm_session_list": {"method": "list_vm_sessions", "description": "List active VM sessions"},
 
-    # VM 池管理
-    "vm_pool_list": {"method": "list_vm_pools", "description": "列出虚拟机池"},
-    "vm_pool_get": {"method": "get_vm_pool", "description": "获取虚拟机池详情"},
-    "vm_pool_create": {"method": "create_vm_pool", "description": "创建虚拟机池"},
-    "vm_pool_delete": {"method": "delete_vm_pool", "description": "删除虚拟机池"},
-    "vm_pool_update": {"method": "update_vm_pool", "description": "更新虚拟机池"},
+    # VM pool management
+    "vm_pool_list": {"method": "list_vm_pools", "description": "List VM pools"},
+    "vm_pool_get": {"method": "get_vm_pool", "description": "Get VM pool details"},
+    "vm_pool_create": {"method": "create_vm_pool", "description": "Create a VM pool"},
+    "vm_pool_delete": {"method": "delete_vm_pool", "description": "Delete a VM pool"},
+    "vm_pool_update": {"method": "update_vm_pool", "description": "Update a VM pool"},
 
-    # 检查点管理
-    "vm_checkpoint_list": {"method": "list_vm_checkpoints", "description": "列出 VM 的检查点"},
-    "vm_checkpoint_create": {"method": "create_vm_checkpoint", "description": "创建 VM 检查点"},
-    "vm_checkpoint_restore": {"method": "restore_vm_checkpoint", "description": "恢复 VM 到检查点"},
-    "vm_checkpoint_delete": {"method": "delete_vm_checkpoint", "description": "删除 VM 检查点"},
+    # Checkpoint management
+    "vm_checkpoint_list": {"method": "list_vm_checkpoints", "description": "List VM checkpoints"},
+    "vm_checkpoint_create": {"method": "create_vm_checkpoint", "description": "Create a VM checkpoint"},
+    "vm_checkpoint_restore": {"method": "restore_vm_checkpoint", "description": "Restore a VM to a checkpoint"},
+    "vm_checkpoint_delete": {"method": "delete_vm_checkpoint", "description": "Delete a VM checkpoint"},
 }

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-oVirt MCP Server - 存储扩展模块
-提供存储域详情、创建、删除和分离操作
+oVirt MCP Server - Storage extension module
+Provides storage domain details, creation, deletion, and detach operations
 """
 from typing import Dict, List, Any, Optional
 import logging
@@ -19,19 +19,19 @@ logger = logging.getLogger(__name__)
 
 
 class StorageExtendedMCP(BaseMCP):
-    """存储扩展管理 MCP"""
+    """Storage extended management MCP."""
 
     def __init__(self, ovirt_mcp):
         super().__init__(ovirt_mcp)
 
     @require_connection
     def get_storage_domain(self, name_or_id: str) -> Optional[Dict]:
-        """获取存储域详情"""
+        """Get storage domain details."""
         sd = self._find_storage_domain(name_or_id)
         if not sd:
             return None
 
-        # 获取存储域的文件列表（如果支持）
+        # Get storage domain files (if supported)
         files = []
         try:
             sd_service = self.connection.system_service().storage_domains_service().storage_domain_service(sd.id)
@@ -39,23 +39,23 @@ class StorageExtendedMCP(BaseMCP):
             file_list = files_service.list()
             files = [
                 {"name": f.name, "size": f.size if hasattr(f, "size") else 0}
-                for f in file_list[:20]  # 限制数量
+                for f in file_list[:20]  # limit count
             ]
         except Exception as e:
-            logger.debug(f"获取存储域文件失败: {e}")
+            logger.debug(f"Failed to get storage domain files: {e}")
 
-        # 获取关联的数据中心
+        # Get associated data centers
         data_centers = []
         try:
             dc_service = sd_service.storage_domains_service() if hasattr(sd_service, 'storage_domains_service') else None
-            # 通过存储域的数据中心链接获取
+            # Resolve via the storage domain's data center link
             if sd.storage_connections:
                 data_centers = [
                     {"id": dc.id, "name": dc.name}
                     for dc in [sd.storage_connections]
                 ]
         except Exception as e:
-            logger.debug(f"获取存储域数据中心失败: {e}")
+            logger.debug(f"Failed to get storage domain data center: {e}")
 
         return {
             "id": sd.id,
@@ -82,33 +82,33 @@ class StorageExtendedMCP(BaseMCP):
                              path: str, datacenter: str = None,
                              description: str = "",
                              domain_type: str = "data") -> Dict[str, Any]:
-        """创建存储域"""
-        # 验证存储类型
+        """Create a storage domain."""
+        # Validate storage type
         valid_storage_types = ["nfs", "fc", "iscsi", "localfs", "posixfs", "glusterfs"]
         if storage_type.lower() not in valid_storage_types:
-            raise ValueError(f"无效的存储类型: {storage_type}，有效值: {valid_storage_types}")
+            raise ValueError(f"Invalid storage type: {storage_type}, valid values: {valid_storage_types}")
 
-        # 验证域类型
+        # Validate domain type
         valid_domain_types = ["data", "iso", "export"]
         if domain_type.lower() not in valid_domain_types:
-            raise ValueError(f"无效的域类型: {domain_type}，有效值: {valid_domain_types}")
+            raise ValueError(f"Invalid domain type: {domain_type}, valid values: {valid_domain_types}")
 
-        # 查找主机
+        # Find the host
         hosts = self.connection.system_service().hosts_service().list(
             search=f"name={_sanitize_search_value(host)}"
         )
         if not hosts:
-            raise ValueError(f"主机不存在: {host}")
+            raise ValueError(f"Host not found: {host}")
 
         sds_service = self.connection.system_service().storage_domains_service()
 
-        # 检查存储域是否已存在
+        # Check whether the storage domain already exists
         existing = sds_service.list(search=f"name={_sanitize_search_value(name)}")
         if existing:
-            raise ValueError(f"存储域已存在: {name}")
+            raise ValueError(f"Storage domain already exists: {name}")
 
         try:
-            # 根据存储类型创建不同的存储配置
+            # Build different storage configuration based on storage type
             if storage_type.lower() == "nfs":
                 storage = sdk.types.HostStorage(
                     type=sdk.types.StorageType.NFS,
@@ -140,65 +140,65 @@ class StorageExtendedMCP(BaseMCP):
             )
             return {
                 "success": True,
-                "message": f"存储域 {name} 已创建",
+                "message": f"Storage domain {name} created",
                 "storage_domain_id": sd.id,
             }
         except Exception as e:
-            raise RuntimeError(f"创建存储域失败: {e}")
+            raise RuntimeError(f"Failed to create storage domain: {e}")
 
     @require_connection
     def delete_storage_domain(self, name_or_id: str, force: bool = False) -> Dict[str, Any]:
-        """删除存储域"""
+        """Delete a storage domain."""
         sd = self._find_storage_domain(name_or_id)
         if not sd:
-            raise ValueError(f"存储域不存在: {name_or_id}")
+            raise ValueError(f"Storage domain not found: {name_or_id}")
 
         sd_service = self.connection.system_service().storage_domains_service().storage_domain_service(sd.id)
 
         try:
             sd_service.remove(force=force)
-            return {"success": True, "message": f"存储域 {sd.name} 已删除"}
+            return {"success": True, "message": f"Storage domain {sd.name} deleted"}
         except Exception as e:
-            raise RuntimeError(f"删除存储域失败: {e}")
+            raise RuntimeError(f"Failed to delete storage domain: {e}")
 
     @require_connection
     def detach_storage_domain(self, name_or_id: str, datacenter: str = None) -> Dict[str, Any]:
-        """从数据中心分离存储域"""
+        """Detach a storage domain from a data center."""
         sd = self._find_storage_domain(name_or_id)
         if not sd:
-            raise ValueError(f"存储域不存在: {name_or_id}")
+            raise ValueError(f"Storage domain not found: {name_or_id}")
 
-        # 获取数据中心
+        # Get the data center
         if not datacenter and sd.storage and sd.storage.data_center:
             datacenter = sd.storage.data_center.name
 
         if not datacenter:
-            raise ValueError("需要指定数据中心名称")
+            raise ValueError("Data center name is required")
 
         dc = self._find_datacenter(datacenter)
         if not dc:
-            raise ValueError(f"数据中心不存在: {datacenter}")
+            raise ValueError(f"Data center not found: {datacenter}")
 
         try:
-            # 通过数据中心的存储域服务分离
+            # Detach via the data center's storage domain service
             dc_service = self.connection.system_service().data_centers_service().data_center_service(dc.id)
             sd_service = dc_service.storage_domains_service().storage_domain_service(sd.id)
             sd_service.remove()
 
-            return {"success": True, "message": f"存储域 {sd.name} 已从数据中心 {datacenter} 分离"}
+            return {"success": True, "message": f"Storage domain {sd.name} detached from data center {datacenter}"}
         except Exception as e:
-            raise RuntimeError(f"分离存储域失败: {e}")
+            raise RuntimeError(f"Failed to detach storage domain: {e}")
 
     @require_connection
     def attach_storage_domain(self, name_or_id: str, datacenter: str) -> Dict[str, Any]:
-        """将存储域附加到数据中心"""
+        """Attach a storage domain to a data center."""
         sd = self._find_storage_domain(name_or_id)
         if not sd:
-            raise ValueError(f"存储域不存在: {name_or_id}")
+            raise ValueError(f"Storage domain not found: {name_or_id}")
 
         dc = self._find_datacenter(datacenter)
         if not dc:
-            raise ValueError(f"数据中心不存在: {datacenter}")
+            raise ValueError(f"Data center not found: {datacenter}")
 
         try:
             dc_service = self.connection.system_service().data_centers_service().data_center_service(dc.id)
@@ -208,16 +208,16 @@ class StorageExtendedMCP(BaseMCP):
                 sdk.types.StorageDomain(id=sd.id)
             )
 
-            return {"success": True, "message": f"存储域 {sd.name} 已附加到数据中心 {datacenter}"}
+            return {"success": True, "message": f"Storage domain {sd.name} attached to data center {datacenter}"}
         except Exception as e:
-            raise RuntimeError(f"附加存储域失败: {e}")
+            raise RuntimeError(f"Failed to attach storage domain: {e}")
 
     @require_connection
     def get_storage_domain_stats(self, name_or_id: str) -> Dict[str, Any]:
-        """获取存储域统计信息"""
+        """Get storage domain statistics."""
         sd = self._find_storage_domain(name_or_id)
         if not sd:
-            raise ValueError(f"存储域不存在: {name_or_id}")
+            raise ValueError(f"Storage domain not found: {name_or_id}")
 
         available = sd.available or 0
         used = sd.used or 0
@@ -237,46 +237,46 @@ class StorageExtendedMCP(BaseMCP):
 
     @require_connection
     def refresh_storage_domain(self, name_or_id: str) -> Dict[str, Any]:
-        """刷新存储域
+        """Refresh a storage domain.
 
         Args:
-            name_or_id: 存储域名称或 ID
+            name_or_id: Storage domain name or ID
 
         Returns:
-            刷新结果
+            Refresh result
         """
         sd = self._find_storage_domain(name_or_id)
         if not sd:
-            raise ValueError(f"存储域不存在: {name_or_id}")
+            raise ValueError(f"Storage domain not found: {name_or_id}")
 
         sd_service = self.connection.system_service().storage_domains_service().storage_domain_service(sd.id)
 
         try:
             sd_service.refresh()
-            return {"success": True, "message": f"存储域 {sd.name} 刷新任务已启动"}
+            return {"success": True, "message": f"Refresh task started for storage domain {sd.name}"}
         except Exception as e:
-            raise RuntimeError(f"刷新存储域失败: {e}")
+            raise RuntimeError(f"Failed to refresh storage domain: {e}")
 
     @require_connection
     def update_storage_domain(self, name_or_id: str, new_name: str = None,
                              description: str = None,
                              warning_low_space: int = None,
                              critical_low_space: int = None) -> Dict[str, Any]:
-        """更新存储域
+        """Update a storage domain.
 
         Args:
-            name_or_id: 存储域名称或 ID
-            new_name: 新名称
-            description: 新描述
-            warning_low_space: 低空间警告阈值（GB）
-            critical_low_space: 临界空间阈值（GB）
+            name_or_id: Storage domain name or ID
+            new_name: New name
+            description: New description
+            warning_low_space: Low space warning threshold (GB)
+            critical_low_space: Critical space threshold (GB)
 
         Returns:
-            更新结果
+            Update result
         """
         sd = self._find_storage_domain(name_or_id)
         if not sd:
-            raise ValueError(f"存储域不存在: {name_or_id}")
+            raise ValueError(f"Storage domain not found: {name_or_id}")
 
         sd_service = self.connection.system_service().storage_domains_service().storage_domain_service(sd.id)
 
@@ -291,23 +291,23 @@ class StorageExtendedMCP(BaseMCP):
 
         try:
             sd_service.update(sd)
-            return {"success": True, "message": f"存储域已更新"}
+            return {"success": True, "message": f"Storage domain updated"}
         except Exception as e:
-            raise RuntimeError(f"更新存储域失败: {e}")
+            raise RuntimeError(f"Failed to update storage domain: {e}")
 
     @require_connection
     def list_storage_files(self, name_or_id: str) -> List[Dict]:
-        """列出存储域的文件
+        """List storage domain files.
 
         Args:
-            name_or_id: 存储域名称或 ID
+            name_or_id: Storage domain name or ID
 
         Returns:
-            文件列表
+            List of files
         """
         sd = self._find_storage_domain(name_or_id)
         if not sd:
-            raise ValueError(f"存储域不存在: {name_or_id}")
+            raise ValueError(f"Storage domain not found: {name_or_id}")
 
         sd_service = self.connection.system_service().storage_domains_service().storage_domain_service(sd.id)
         files_service = sd_service.files_service()
@@ -315,7 +315,7 @@ class StorageExtendedMCP(BaseMCP):
         try:
             files = files_service.list()
         except Exception as e:
-            logger.error(f"获取存储域文件失败: {e}")
+            logger.error(f"Failed to get storage domain files: {e}")
             return []
 
         return [
@@ -329,20 +329,20 @@ class StorageExtendedMCP(BaseMCP):
 
     @require_connection
     def list_storage_connections(self, name_or_id: str = None) -> List[Dict]:
-        """列出存储连接
+        """List storage connections.
 
         Args:
-            name_or_id: 存储域名称或 ID（可选，不指定则列出所有）
+            name_or_id: Storage domain name or ID(optional; list all if omitted)
 
         Returns:
-            存储连接列表
+            List of storage connections
         """
         if name_or_id:
             # scope to one storage domain — its connections are served by the
             # domain service, not by the system-level collection
             sd = self._find_storage_domain(name_or_id)
             if not sd:
-                raise ValueError(f"存储域不存在: {name_or_id}")
+                raise ValueError(f"Storage domain not found: {name_or_id}")
             sd_service = (
                 self.connection.system_service()
                 .storage_domains_service()
@@ -355,7 +355,7 @@ class StorageExtendedMCP(BaseMCP):
         try:
             connections = connections_service.list()
         except Exception as e:
-            logger.error(f"获取存储连接失败: {e}")
+            logger.error(f"Failed to get storage connections: {e}")
             return []
 
         return [
@@ -374,17 +374,17 @@ class StorageExtendedMCP(BaseMCP):
 
     @require_connection
     def list_available_disks(self, name_or_id: str) -> List[Dict]:
-        """列出存储域上的可用磁盘
+        """List available disks on a storage domain.
 
         Args:
-            name_or_id: 存储域名称或 ID
+            name_or_id: Storage domain name or ID
 
         Returns:
-            可用磁盘列表
+            List of available disks
         """
         sd = self._find_storage_domain(name_or_id)
         if not sd:
-            raise ValueError(f"存储域不存在: {name_or_id}")
+            raise ValueError(f"Storage domain not found: {name_or_id}")
 
         sd_service = self.connection.system_service().storage_domains_service().storage_domain_service(sd.id)
         disks_service = sd_service.disks_service()
@@ -392,7 +392,7 @@ class StorageExtendedMCP(BaseMCP):
         try:
             disks = disks_service.list()
         except Exception as e:
-            logger.error(f"获取可用磁盘失败: {e}")
+            logger.error(f"Failed to get available disks: {e}")
             return []
 
         return [
@@ -410,21 +410,21 @@ class StorageExtendedMCP(BaseMCP):
 
     @require_connection
     def list_export_vms(self, name_or_id: str) -> List[Dict]:
-        """列出导出域上的 VM
+        """List VMs on an export domain.
 
         Args:
-            name_or_id: 导出域名称或 ID
+            name_or_id: Export domain name or ID
 
         Returns:
-            VM 列表
+            List of VMs
         """
         sd = self._find_storage_domain(name_or_id)
         if not sd:
-            raise ValueError(f"存储域不存在: {name_or_id}")
+            raise ValueError(f"Storage domain not found: {name_or_id}")
 
-        # 检查是否为导出域
+        # Check that this is an export domain
         if sd.type and sd.type.value != "export":
-            raise ValueError("此存储域不是导出域")
+            raise ValueError("This storage domain is not an export domain")
 
         sd_service = self.connection.system_service().storage_domains_service().storage_domain_service(sd.id)
         vms_service = sd_service.vms_service()
@@ -432,7 +432,7 @@ class StorageExtendedMCP(BaseMCP):
         try:
             vms = vms_service.list()
         except Exception as e:
-            logger.error(f"获取导出 VM 列表失败: {e}")
+            logger.error(f"Failed to list exported VMs: {e}")
             return []
 
         return [
@@ -451,42 +451,42 @@ class StorageExtendedMCP(BaseMCP):
     def import_vm_from_export(self, name_or_id: str, vm_name: str,
                              cluster: str, storage_domain: str = None,
                              clone: bool = False) -> Dict[str, Any]:
-        """从导出域导入 VM
+        """Import a VM from an export domain.
 
         Args:
-            name_or_id: 导出域名称或 ID
-            vm_name: 要导入的 VM 名称
-            cluster: 目标集群
-            storage_domain: 目标存储域（可选）
-            clone: 是否克隆
+            name_or_id: Export domain name or ID
+            vm_name: VM name to import
+            cluster: Target cluster
+            storage_domain: Target storage domain (optional)
+            clone: Whether to clone
 
         Returns:
-            导入结果
+            Import result
         """
         sd = self._find_storage_domain(name_or_id)
         if not sd:
-            raise ValueError(f"存储域不存在: {name_or_id}")
+            raise ValueError(f"Storage domain not found: {name_or_id}")
 
-        # 查找集群
+        # Find the cluster
         clusters = self.connection.system_service().clusters_service().list(
             search=f"name={_sanitize_search_value(cluster)}"
         )
         if not clusters:
-            raise ValueError(f"集群不存在: {cluster}")
+            raise ValueError(f"Cluster not found: {cluster}")
 
         sd_service = self.connection.system_service().storage_domains_service().storage_domain_service(sd.id)
         vms_service = sd_service.vms_service()
 
-        # 查找要导入的 VM
+        # Find the VM to import
         vms = vms_service.list(search=f"name={_sanitize_search_value(vm_name)}")
         if not vms:
-            raise ValueError(f"导出域中不存在 VM: {vm_name}")
+            raise ValueError(f"VM not found in export domain: {vm_name}")
 
         vm = vms[0]
         vm_service = vms_service.vm_service(vm.id)
 
         try:
-            # 导入 VM
+            # Import the VM
             import_params = sdk.types.Vm(
                 cluster=sdk.types.Cluster(id=clusters[0].id),
             )
@@ -505,24 +505,24 @@ class StorageExtendedMCP(BaseMCP):
 
             return {
                 "success": True,
-                "message": f"VM {vm_name} 导入任务已启动",
+                "message": f"Import task started for VM {vm_name}",
                 "vm_id": vm.id,
                 "cluster": cluster,
             }
         except Exception as e:
-            raise RuntimeError(f"导入 VM 失败: {e}")
+            raise RuntimeError(f"Failed to import VM: {e}")
 
     @require_connection
     def list_disk_snapshots(self, disk_name_or_id: str) -> List[Dict]:
-        """列出磁盘快照
+        """List disk snapshots.
 
         Args:
-            disk_name_or_id: 磁盘名称或 ID
+            disk_name_or_id: Disk name or ID
 
         Returns:
-            磁盘快照列表
+            List of disk snapshots
         """
-        # 查找磁盘
+        # Find the disk
         disks_service = self.connection.system_service().disks_service()
 
         disk_id = None
@@ -532,7 +532,7 @@ class StorageExtendedMCP(BaseMCP):
         except Exception:
             disks = disks_service.list(search=f"name={_sanitize_search_value(disk_name_or_id)}")
             if not disks:
-                raise ValueError(f"磁盘不存在: {disk_name_or_id}")
+                raise ValueError(f"Disk not found: {disk_name_or_id}")
             disk_id = disks[0].id
 
         disk_service = disks_service.disk_service(disk_id)
@@ -541,7 +541,7 @@ class StorageExtendedMCP(BaseMCP):
         try:
             snapshots = snapshots_service.list()
         except Exception as e:
-            logger.error(f"获取磁盘快照失败: {e}")
+            logger.error(f"Failed to get disk snapshots: {e}")
             return []
 
         return [
@@ -557,10 +557,10 @@ class StorageExtendedMCP(BaseMCP):
 
     @require_connection
     def list_iscsi_bonds(self) -> List[Dict]:
-        """列出 iSCSI Bond
+        """List iSCSI bonds.
 
         Returns:
-            iSCSI Bond 列表
+            List of iSCSI bonds
         """
         # iSCSI bonds are data-center-scoped; SystemService has no
         # ``iscsi_bonds_service`` (the old lookup crashed with AttributeError).
@@ -571,7 +571,7 @@ class StorageExtendedMCP(BaseMCP):
             try:
                 bonds = dcs_service.data_center_service(dc.id).iscsi_bonds_service().list()
             except Exception as e:
-                logger.error(f"获取 iSCSI Bond 列表失败: {e}")
+                logger.error(f"Failed to list iSCSI bonds: {e}")
                 continue
 
             for b in bonds:
@@ -585,23 +585,23 @@ class StorageExtendedMCP(BaseMCP):
         return result
 
 
-# MCP 工具注册表
+# MCP tool registry
 MCP_TOOLS = {
-    "storage_get": {"method": "get_storage_domain", "description": "获取存储域详情"},
-    "storage_create": {"method": "create_storage_domain", "description": "创建存储域"},
-    "storage_delete": {"method": "delete_storage_domain", "description": "删除存储域"},
-    "storage_detach": {"method": "detach_storage_domain", "description": "分离存储域"},
-    "storage_attach_to_dc": {"method": "attach_storage_domain", "description": "附加存储域到数据中心"},
-    "storage_stats": {"method": "get_storage_domain_stats", "description": "获取存储域统计信息"},
+    "storage_get": {"method": "get_storage_domain", "description": "Get storage domain details"},
+    "storage_create": {"method": "create_storage_domain", "description": "Create storage domain"},
+    "storage_delete": {"method": "delete_storage_domain", "description": "Delete storage domain"},
+    "storage_detach": {"method": "detach_storage_domain", "description": "Detach storage domain"},
+    "storage_attach_to_dc": {"method": "attach_storage_domain", "description": "Attach storage domain to data center"},
+    "storage_stats": {"method": "get_storage_domain_stats", "description": "Get storage domain statistics"},
 
-    # 新增工具
-    "storage_refresh": {"method": "refresh_storage_domain", "description": "刷新存储域"},
-    "storage_update": {"method": "update_storage_domain", "description": "更新存储域配置"},
-    "storage_files": {"method": "list_storage_files", "description": "列出存储域的文件"},
-    "storage_connections_list": {"method": "list_storage_connections", "description": "列出存储连接"},
-    "storage_available_disks": {"method": "list_available_disks", "description": "列出存储域上的可用磁盘"},
-    "storage_export_vms": {"method": "list_export_vms", "description": "列出导出域上的 VM"},
-    "storage_import_vm": {"method": "import_vm_from_export", "description": "从导出域导入 VM"},
-    "disk_snapshot_list": {"method": "list_disk_snapshots", "description": "列出磁盘快照"},
-    "iscsi_bond_list": {"method": "list_iscsi_bonds", "description": "列出 iSCSI Bond"},
+    # New tools
+    "storage_refresh": {"method": "refresh_storage_domain", "description": "Refresh storage domain"},
+    "storage_update": {"method": "update_storage_domain", "description": "Update storage domain configuration"},
+    "storage_files": {"method": "list_storage_files", "description": "List storage domain files"},
+    "storage_connections_list": {"method": "list_storage_connections", "description": "List storage connections"},
+    "storage_available_disks": {"method": "list_available_disks", "description": "List available disks on storage domain"},
+    "storage_export_vms": {"method": "list_export_vms", "description": "List VMs on export domain"},
+    "storage_import_vm": {"method": "import_vm_from_export", "description": "Import VM from export domain"},
+    "disk_snapshot_list": {"method": "list_disk_snapshots", "description": "List disk snapshots"},
+    "iscsi_bond_list": {"method": "list_iscsi_bonds", "description": "List iSCSI bonds"},
 }

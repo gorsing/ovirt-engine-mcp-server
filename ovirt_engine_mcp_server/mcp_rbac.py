@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-oVirt MCP Server - RBAC 管理模块
-提供用户、组、角色、权限、标签的管理功能
+oVirt MCP Server - RBAC management module
+Provides user, group, role, permission, and tag management
 """
 from typing import Dict, List, Any, Optional
 import logging
@@ -19,18 +19,18 @@ logger = logging.getLogger(__name__)
 
 
 class RbacMCP(BaseMCP):
-    """RBAC 管理 MCP"""
+    """RBAC management MCP"""
 
     def __init__(self, ovirt_mcp):
         super().__init__(ovirt_mcp)
 
-    # ── 资源查找辅助方法（BaseMCP 未提供的）───────────────────────────────
+    # -- Resource lookup helpers (not provided by BaseMCP)-------------------------------
 
     def _find_group(self, name_or_id: str) -> Optional[Any]:
-        """查找组（按名称或 ID）"""
+        """Find group (by name or ID)"""
         groups_service = self.connection.system_service().groups_service()
 
-        # 先尝试按 ID 查找
+        # Try to find by ID first
         try:
             group = groups_service.group_service(name_or_id).get()
             if group:
@@ -38,15 +38,15 @@ class RbacMCP(BaseMCP):
         except Exception:
             pass
 
-        # 按名称搜索
+        # Search by name
         groups = groups_service.list(search=f"name={_sanitize_search_value(name_or_id)}")
         return groups[0] if groups else None
 
     def _find_tag(self, name_or_id: str) -> Optional[Any]:
-        """查找标签（按名称或 ID）"""
+        """Find tag (by name or ID)"""
         tags_service = self.connection.system_service().tags_service()
 
-        # 先尝试按 ID 查找
+        # Try to find by ID first
         try:
             tag = tags_service.tag_service(name_or_id).get()
             if tag:
@@ -54,19 +54,19 @@ class RbacMCP(BaseMCP):
         except Exception:
             pass
 
-        # 按名称搜索
+        # Search by name
         tags = tags_service.list(search=f"name={_sanitize_search_value(name_or_id)}")
         return tags[0] if tags else None
 
     def _get_resource_service(self, resource_type: str, resource_id: str) -> Optional[Any]:
-        """根据资源类型获取对应的 service
+        """Get the service for the resource type
 
         Args:
-            resource_type: 资源类型（vm, host, cluster, datacenter, network, storagedomain, template）
-            resource_id: 资源 ID
+            resource_type: Resource type (vm, host, cluster, datacenter, network, storagedomain, template)
+            resource_id: Resource ID
 
         Returns:
-            资源对应的 service 对象
+            Service object for the resource
         """
         system_service = self.connection.system_service()
         resource_type_lower = resource_type.lower()
@@ -82,15 +82,15 @@ class RbacMCP(BaseMCP):
         }
 
         if resource_type_lower not in service_map:
-            raise ValueError(f"不支持的资源类型: {resource_type}，支持的类型: {list(service_map.keys())}")
+            raise ValueError(f"Unsupported resource type: {resource_type}, supported types: {list(service_map.keys())}")
 
         return service_map[resource_type_lower]()
 
     def _find_resource_by_type(self, resource_type: str, name_or_id: str) -> Optional[Any]:
-        """根据资源类型查找资源"""
+        """Find resource by type"""
         resource_type_lower = resource_type.lower()
 
-        # 定义每种资源类型的查找逻辑
+        # Lookup logic for each resource type
         find_map = {
             "vm": lambda: self._find_vm(name_or_id),
             "host": lambda: self._find_host(name_or_id),
@@ -102,21 +102,21 @@ class RbacMCP(BaseMCP):
         }
 
         if resource_type_lower not in find_map:
-            raise ValueError(f"不支持的资源类型: {resource_type}")
+            raise ValueError(f"Unsupported resource type: {resource_type}")
 
         return find_map[resource_type_lower]()
 
-    # ── User 管理 ──────────────────────────────────────────────────────────
+    # -- User management ----------------------------------------------------------
 
     @require_connection
     def list_users(self, search: str = None) -> List[Dict]:
-        """列出用户
+        """List users
 
         Args:
-            search: 搜索条件（可选）
+            search: Search filter (optional)
 
         Returns:
-            用户列表
+            List of users
         """
         users_service = self.connection.system_service().users_service()
 
@@ -126,7 +126,7 @@ class RbacMCP(BaseMCP):
             else:
                 users = users_service.list()
         except Exception as e:
-            logger.error(f"获取用户列表失败: {e}")
+            logger.error(f"Failed to list users: {e}")
             return []
 
         result = []
@@ -145,19 +145,19 @@ class RbacMCP(BaseMCP):
 
     @require_connection
     def get_user(self, name_or_id: str) -> Optional[Dict]:
-        """获取用户详情
+        """Get user details
 
         Args:
-            name_or_id: 用户名称或 ID
+            name_or_id: User name or ID
 
         Returns:
-            用户详情
+            User details
         """
         user = self._find_user(name_or_id)
         if not user:
             return None
 
-        # 获取用户的权限列表
+        # Get permission list for the user
         permissions = []
         try:
             user_service = self.connection.system_service().users_service().user_service(user.id)
@@ -170,10 +170,10 @@ class RbacMCP(BaseMCP):
                     "object_id": p.object.id if p.object else "",
                     "object_type": p.object.type if p.object and hasattr(p.object, 'type') else "",
                 }
-                for p in perms[:20]  # 限制数量
+                for p in perms[:20]  # Limit the count
             ]
         except Exception as e:
-            logger.debug(f"获取用户权限失败: {e}")
+            logger.debug(f"Failed to get user permissions: {e}")
 
         return {
             "id": user.id,
@@ -187,17 +187,17 @@ class RbacMCP(BaseMCP):
             "permission_count": len(permissions),
         }
 
-    # ── Group 管理 ─────────────────────────────────────────────────────────
+    # -- Group management ---------------------------------------------------------
 
     @require_connection
     def list_groups(self, search: str = None) -> List[Dict]:
-        """列出用户组
+        """List groups
 
         Args:
-            search: 搜索条件（可选）
+            search: Search filter (optional)
 
         Returns:
-            用户组列表
+            List of groups
         """
         groups_service = self.connection.system_service().groups_service()
 
@@ -207,7 +207,7 @@ class RbacMCP(BaseMCP):
             else:
                 groups = groups_service.list()
         except Exception as e:
-            logger.error(f"获取用户组列表失败: {e}")
+            logger.error(f"Failed to list groups: {e}")
             return []
 
         result = []
@@ -222,19 +222,19 @@ class RbacMCP(BaseMCP):
 
     @require_connection
     def get_group(self, name_or_id: str) -> Optional[Dict]:
-        """获取用户组详情
+        """Get group details
 
         Args:
-            name_or_id: 组名称或 ID
+            name_or_id: Group name or ID
 
         Returns:
-            用户组详情
+            Group details
         """
         group = self._find_group(name_or_id)
         if not group:
             return None
 
-        # 获取组的权限列表
+        # Get permission list for the group
         permissions = []
         try:
             group_service = self.connection.system_service().groups_service().group_service(group.id)
@@ -247,10 +247,10 @@ class RbacMCP(BaseMCP):
                     "object_id": p.object.id if p.object else "",
                     "object_type": p.object.type if p.object and hasattr(p.object, 'type') else "",
                 }
-                for p in perms[:20]  # 限制数量
+                for p in perms[:20]  # Limit the count
             ]
         except Exception as e:
-            logger.debug(f"获取组权限失败: {e}")
+            logger.debug(f"Failed to get group permissions: {e}")
 
         return {
             "id": group.id,
@@ -260,21 +260,21 @@ class RbacMCP(BaseMCP):
             "permission_count": len(permissions),
         }
 
-    # ── Role 管理 ──────────────────────────────────────────────────────────
+    # -- Role management ----------------------------------------------------------
 
     @require_connection
     def list_roles(self) -> List[Dict]:
-        """列出所有角色
+        """List all roles
 
         Returns:
-            角色列表
+            List of roles
         """
         roles_service = self.connection.system_service().roles_service()
 
         try:
             roles = roles_service.list()
         except Exception as e:
-            logger.error(f"获取角色列表失败: {e}")
+            logger.error(f"Failed to list roles: {e}")
             return []
 
         result = []
@@ -290,19 +290,19 @@ class RbacMCP(BaseMCP):
 
     @require_connection
     def get_role(self, name_or_id: str) -> Optional[Dict]:
-        """获取角色详情（包含权限列表）
+        """Get role details (including permit list)
 
         Args:
-            name_or_id: 角色名称或 ID
+            name_or_id: Role name or ID
 
         Returns:
-            角色详情
+            Role details
         """
         role = self._find_role(name_or_id)
         if not role:
             return None
 
-        # 获取角色的权限列表（permits）
+        # Get permit list for the role
         permits = []
         try:
             role_service = self.connection.system_service().roles_service().role_service(role.id)
@@ -317,7 +317,7 @@ class RbacMCP(BaseMCP):
                 for p in permit_list
             ]
         except Exception as e:
-            logger.debug(f"获取角色权限列表失败: {e}")
+            logger.debug(f"Failed to get role permits: {e}")
 
         return {
             "id": role.id,
@@ -332,25 +332,25 @@ class RbacMCP(BaseMCP):
     def create_role(self, name: str, description: str = "",
                    administrative: bool = False,
                    permit_ids: List[str] = None) -> Dict[str, Any]:
-        """创建角色
+        """Create role
 
         Args:
-            name: 角色名称
-            description: 描述
-            administrative: 是否为管理员角色
-            permit_ids: 权限 ID 列表
+            name: Role name
+            description: Description
+            administrative: Whether it is an administrative role
+            permit_ids: List of permit IDs
 
         Returns:
-            创建结果
+            Creation result
         """
         roles_service = self.connection.system_service().roles_service()
 
-        # 检查是否已存在
+        # Check whether it already exists
         existing = roles_service.list(search=f"name={_sanitize_search_value(name)}")
         if existing:
-            raise ValueError(f"角色已存在: {name}")
+            raise ValueError(f"Role already exists: {name}")
 
-        # 构建 permit 列表
+        # Build the permit list
         permits = []
         if permit_ids:
             for permit_id in permit_ids:
@@ -368,51 +368,51 @@ class RbacMCP(BaseMCP):
 
             return {
                 "success": True,
-                "message": f"角色 {name} 已创建",
+                "message": f"Role {name} created",
                 "role_id": role.id,
             }
         except Exception as e:
-            raise RuntimeError(f"创建角色失败: {e}")
+            raise RuntimeError(f"Failed to create role: {e}")
 
     @require_connection
     def delete_role(self, name_or_id: str) -> Dict[str, Any]:
-        """删除角色
+        """Delete role
 
         Args:
-            name_or_id: 角色名称或 ID
+            name_or_id: Role name or ID
 
         Returns:
-            删除结果
+            Deletion result
         """
         role = self._find_role(name_or_id)
         if not role:
-            raise ValueError(f"角色不存在: {name_or_id}")
+            raise ValueError(f"Role not found: {name_or_id}")
 
-        # 检查是否为系统内置角色
+        # Check whether it is a built-in system role
         if hasattr(role, 'administrative') and role.id in ['00000000-0000-0000-0000-000000000001',
                                                             '00000000-0000-0000-0000-000000000002']:
-            raise ValueError("不能删除系统内置角色")
+            raise ValueError("Cannot delete built-in system roles")
 
         roles_service = self.connection.system_service().roles_service()
         role_service = roles_service.role_service(role.id)
 
         try:
             role_service.remove()
-            return {"success": True, "message": f"角色 {role.name} 已删除"}
+            return {"success": True, "message": f"Role {role.name} deleted"}
         except Exception as e:
-            raise RuntimeError(f"删除角色失败: {e}")
+            raise RuntimeError(f"Failed to delete role: {e}")
 
-    # ── Permit 管理 ────────────────────────────────────────────────────────
+    # -- Permit management --------------------------------------------------------
 
     @require_connection
     def list_permits(self) -> List[Dict]:
-        """列出所有权限单元
+        """List all permits
 
         Returns:
-            权限单元列表
+            List of permits
         """
-        # 通过获取所有角色的 permits 来汇总
-        permits_map = {}  # 用 id 去重
+        # Aggregate by collecting permits of all roles
+        permits_map = {}  # Deduplicate by id
 
         try:
             roles_service = self.connection.system_service().roles_service()
@@ -432,40 +432,40 @@ class RbacMCP(BaseMCP):
                                 "administrative": p.administrative if hasattr(p, 'administrative') else False,
                             }
                 except Exception as e:
-                    logger.debug(f"获取角色 {role.name} 的权限失败: {e}")
+                    logger.debug(f"Failed to get permits for role {role.name}: {e}")
 
         except Exception as e:
-            logger.error(f"获取权限列表失败: {e}")
+            logger.error(f"Failed to list permissions: {e}")
             return []
 
         return list(permits_map.values())
 
-    # ── Permission 管理 ────────────────────────────────────────────────────
+    # -- Permission management ----------------------------------------------------
 
     @require_connection
     def list_permissions(self, resource_type: str, resource_id: str) -> List[Dict]:
-        """列出资源的权限
+        """List resource permissions
 
         Args:
-            resource_type: 资源类型（vm, host, cluster, datacenter, network, storagedomain, template）
-            resource_id: 资源 ID
+            resource_type: Resource type (vm, host, cluster, datacenter, network, storagedomain, template)
+            resource_id: Resource ID
 
         Returns:
-            权限列表
+            List of permissions
         """
-        # 先查找资源
+        # Find the resource first
         resource = self._find_resource_by_type(resource_type, resource_id)
         if not resource:
-            raise ValueError(f"资源不存在: {resource_type}/{resource_id}")
+            raise ValueError(f"Resource not found: {resource_type}/{resource_id}")
 
-        # 获取资源的 permissions_service
+        # Get permissions_service for the resource
         resource_service = self._get_resource_service(resource_type, resource.id)
         permissions_service = resource_service.permissions_service()
 
         try:
             permissions = permissions_service.list()
         except Exception as e:
-            logger.error(f"获取权限列表失败: {e}")
+            logger.error(f"Failed to list permissions: {e}")
             return []
 
         result = []
@@ -486,50 +486,50 @@ class RbacMCP(BaseMCP):
     def assign_permission(self, resource_type: str, resource_id: str,
                          user_or_group: str, role_name: str,
                          principal_name: str) -> Dict[str, Any]:
-        """分配权限
+        """Assign permission
 
         Args:
-            resource_type: 资源类型（vm, host, cluster, datacenter, network, storagedomain, template）
-            resource_id: 资源 ID 或名称
-            user_or_group: 主体类型（user 或 group）
-            role_name: 角色名称或 ID
-            principal_name: 用户名或组名
+            resource_type: Resource type (vm, host, cluster, datacenter, network, storagedomain, template)
+            resource_id: Resource ID or name
+            user_or_group: Principal type (user or group)
+            role_name: Role name or ID
+            principal_name: User name or group name
 
         Returns:
-            分配结果
+            Assignment result
         """
-        # 验证参数
+        # Validate parameters
         if user_or_group.lower() not in ["user", "group"]:
-            raise ValueError("user_or_group 必须是 'user' 或 'group'")
+            raise ValueError("user_or_group must be 'user' or 'group'")
 
-        # 查找资源
+        # Find the resource
         resource = self._find_resource_by_type(resource_type, resource_id)
         if not resource:
-            raise ValueError(f"资源不存在: {resource_type}/{resource_id}")
+            raise ValueError(f"Resource not found: {resource_type}/{resource_id}")
 
-        # 查找角色
+        # Find the role
         role = self._find_role(role_name)
         if not role:
-            raise ValueError(f"角色不存在: {role_name}")
+            raise ValueError(f"Role not found: {role_name}")
 
-        # 查找用户或组
+        # Find the user or group
         user_obj = None
         group_obj = None
 
         if user_or_group.lower() == "user":
             user_obj = self._find_user(principal_name)
             if not user_obj:
-                raise ValueError(f"用户不存在: {principal_name}")
+                raise ValueError(f"User not found: {principal_name}")
         else:
             group_obj = self._find_group(principal_name)
             if not group_obj:
-                raise ValueError(f"组不存在: {principal_name}")
+                raise ValueError(f"Group not found: {principal_name}")
 
-        # 获取资源的 permissions_service
+        # Get permissions_service for the resource
         resource_service = self._get_resource_service(resource_type, resource.id)
         permissions_service = resource_service.permissions_service()
 
-        # 构建权限对象
+        # Build the permission object
         try:
             if user_obj:
                 permission = sdk.types.Permission(
@@ -546,59 +546,59 @@ class RbacMCP(BaseMCP):
 
             return {
                 "success": True,
-                "message": f"已将角色 {role.name} 分配给 {user_or_group} {principal_name}",
+                "message": f"Assigned role {role.name} to {user_or_group} {principal_name}",
                 "permission_id": result.id,
                 "resource_type": resource_type,
                 "resource_id": resource.id,
                 "role": role.name,
             }
         except Exception as e:
-            raise RuntimeError(f"分配权限失败: {e}")
+            raise RuntimeError(f"Failed to assign permission: {e}")
 
     @require_connection
     def revoke_permission(self, resource_type: str, resource_id: str,
                          permission_id: str) -> Dict[str, Any]:
-        """撤销权限
+        """Revoke permission
 
         Args:
-            resource_type: 资源类型
-            resource_id: 资源 ID 或名称
-            permission_id: 权限 ID
+            resource_type: Resource type
+            resource_id: Resource ID or name
+            permission_id: Permission ID
 
         Returns:
-            撤销结果
+            Revocation result
         """
-        # 查找资源
+        # Find the resource
         resource = self._find_resource_by_type(resource_type, resource_id)
         if not resource:
-            raise ValueError(f"资源不存在: {resource_type}/{resource_id}")
+            raise ValueError(f"Resource not found: {resource_type}/{resource_id}")
 
-        # 获取资源的 permissions_service
+        # Get permissions_service for the resource
         resource_service = self._get_resource_service(resource_type, resource.id)
         permissions_service = resource_service.permissions_service()
         permission_service = permissions_service.permission_service(permission_id)
 
         try:
             permission_service.remove()
-            return {"success": True, "message": f"权限 {permission_id} 已撤销"}
+            return {"success": True, "message": f"Permission {permission_id} revoked"}
         except Exception as e:
-            raise RuntimeError(f"撤销权限失败: {e}")
+            raise RuntimeError(f"Failed to revoke permission: {e}")
 
-    # ── Tag 管理 ───────────────────────────────────────────────────────────
+    # -- Tag management -----------------------------------------------------------
 
     @require_connection
     def list_tags(self) -> List[Dict]:
-        """列出所有标签
+        """List all tags
 
         Returns:
-            标签列表
+            List of tags
         """
         tags_service = self.connection.system_service().tags_service()
 
         try:
             tags = tags_service.list()
         except Exception as e:
-            logger.error(f"获取标签列表失败: {e}")
+            logger.error(f"Failed to list tags: {e}")
             return []
 
         result = []
@@ -615,29 +615,29 @@ class RbacMCP(BaseMCP):
     @require_connection
     def create_tag(self, name: str, description: str = "",
                   parent_name: str = None) -> Dict[str, Any]:
-        """创建标签
+        """Create tag
 
         Args:
-            name: 标签名称
-            description: 描述
-            parent_name: 父标签名称（可选）
+            name: Tag name
+            description: Description
+            parent_name: Parent tag name (optional)
 
         Returns:
-            创建结果
+            Creation result
         """
         tags_service = self.connection.system_service().tags_service()
 
-        # 检查是否已存在
+        # Check whether it already exists
         existing = tags_service.list(search=f"name={_sanitize_search_value(name)}")
         if existing:
-            raise ValueError(f"标签已存在: {name}")
+            raise ValueError(f"Tag already exists: {name}")
 
-        # 构建标签对象
+        # Build the tag object
         parent_tag = None
         if parent_name:
             parent = self._find_tag(parent_name)
             if not parent:
-                raise ValueError(f"父标签不存在: {parent_name}")
+                raise ValueError(f"Parent tag not found: {parent_name}")
             parent_tag = sdk.types.Tag(id=parent.id)
 
         try:
@@ -651,143 +651,143 @@ class RbacMCP(BaseMCP):
 
             return {
                 "success": True,
-                "message": f"标签 {name} 已创建",
+                "message": f"Tag {name} created",
                 "tag_id": tag.id,
             }
         except Exception as e:
-            raise RuntimeError(f"创建标签失败: {e}")
+            raise RuntimeError(f"Failed to create tag: {e}")
 
     @require_connection
     def delete_tag(self, name_or_id: str) -> Dict[str, Any]:
-        """删除标签
+        """Delete tag
 
         Args:
-            name_or_id: 标签名称或 ID
+            name_or_id: Tag name or ID
 
         Returns:
-            删除结果
+            Deletion result
         """
         tag = self._find_tag(name_or_id)
         if not tag:
-            raise ValueError(f"标签不存在: {name_or_id}")
+            raise ValueError(f"Tag not found: {name_or_id}")
 
         tags_service = self.connection.system_service().tags_service()
         tag_service = tags_service.tag_service(tag.id)
 
         try:
             tag_service.remove()
-            return {"success": True, "message": f"标签 {tag.name} 已删除"}
+            return {"success": True, "message": f"Tag {tag.name} deleted"}
         except Exception as e:
-            raise RuntimeError(f"删除标签失败: {e}")
+            raise RuntimeError(f"Failed to delete tag: {e}")
 
     @require_connection
     def assign_tag(self, resource_type: str, resource_id: str,
                   tag_name: str) -> Dict[str, Any]:
-        """为资源分配标签
+        """Assign tag to resource
 
         Args:
-            resource_type: 资源类型（vm, host, cluster, datacenter, network, storagedomain, template）
-            resource_id: 资源 ID 或名称
-            tag_name: 标签名称或 ID
+            resource_type: Resource type (vm, host, cluster, datacenter, network, storagedomain, template)
+            resource_id: Resource ID or name
+            tag_name: Tag name or ID
 
         Returns:
-            分配结果
+            Assignment result
         """
-        # 查找资源
+        # Find the resource
         resource = self._find_resource_by_type(resource_type, resource_id)
         if not resource:
-            raise ValueError(f"资源不存在: {resource_type}/{resource_id}")
+            raise ValueError(f"Resource not found: {resource_type}/{resource_id}")
 
-        # 查找标签
+        # Find the tag
         tag = self._find_tag(tag_name)
         if not tag:
-            raise ValueError(f"标签不存在: {tag_name}")
+            raise ValueError(f"Tag not found: {tag_name}")
 
-        # 获取资源的 tags_service
+        # Get tags_service for the resource
         resource_service = self._get_resource_service(resource_type, resource.id)
         tags_service = resource_service.tags_service()
 
-        # 检查是否已分配
+        # Check whether it is already assigned
         try:
             existing_tags = tags_service.list()
             for existing in existing_tags:
                 if existing.id == tag.id:
-                    return {"success": True, "message": f"标签 {tag.name} 已分配给资源"}
+                    return {"success": True, "message": f"Tag {tag.name} assigned to resource"}
         except Exception:
             pass
 
-        # 分配标签
+        # Assign the tag
         try:
             tags_service.add(sdk.types.Tag(id=tag.id))
 
             return {
                 "success": True,
-                "message": f"标签 {tag.name} 已分配给 {resource_type}",
+                "message": f"Tag {tag.name} assigned to {resource_type}",
                 "tag_id": tag.id,
                 "resource_type": resource_type,
                 "resource_id": resource.id,
             }
         except Exception as e:
-            raise RuntimeError(f"分配标签失败: {e}")
+            raise RuntimeError(f"Failed to assign tag: {e}")
 
     @require_connection
     def unassign_tag(self, resource_type: str, resource_id: str,
                     tag_name: str) -> Dict[str, Any]:
-        """移除资源的标签
+        """Remove tag from resource
 
         Args:
-            resource_type: 资源类型
-            resource_id: 资源 ID 或名称
-            tag_name: 标签名称或 ID
+            resource_type: Resource type
+            resource_id: Resource ID or name
+            tag_name: Tag name or ID
 
         Returns:
-            移除结果
+            Removal result
         """
-        # 查找资源
+        # Find the resource
         resource = self._find_resource_by_type(resource_type, resource_id)
         if not resource:
-            raise ValueError(f"资源不存在: {resource_type}/{resource_id}")
+            raise ValueError(f"Resource not found: {resource_type}/{resource_id}")
 
-        # 查找标签
+        # Find the tag
         tag = self._find_tag(tag_name)
         if not tag:
-            raise ValueError(f"标签不存在: {tag_name}")
+            raise ValueError(f"Tag not found: {tag_name}")
 
-        # 获取资源的 tags_service
+        # Get tags_service for the resource
         resource_service = self._get_resource_service(resource_type, resource.id)
         tags_service = resource_service.tags_service()
         tag_service = tags_service.tag_service(tag.id)
 
         try:
             tag_service.remove()
-            return {"success": True, "message": f"标签 {tag.name} 已从资源移除"}
+            return {"success": True, "message": f"Tag {tag.name} removed from resource"}
         except Exception as e:
-            raise RuntimeError(f"移除标签失败: {e}")
+            raise RuntimeError(f"Failed to remove tag: {e}")
 
     @require_connection
     def list_resource_tags(self, resource_type: str, resource_id: str) -> List[Dict]:
-        """列出资源的标签
+        """List resource tags
 
         Args:
-            resource_type: 资源类型
-            resource_id: 资源 ID 或名称
+            resource_type: Resource type
+            resource_id: Resource ID or name
 
         Returns:
-            标签列表
+            List of tags
         """
-        # 查找资源
+        # Find the resource
         resource = self._find_resource_by_type(resource_type, resource_id)
         if not resource:
-            raise ValueError(f"资源不存在: {resource_type}/{resource_id}")
+            raise ValueError(f"Resource not found: {resource_type}/{resource_id}")
 
-        # 获取资源的 tags_service
+        # Get tags_service for the resource
         resource_service = self._get_resource_service(resource_type, resource.id)
         tags_service = resource_service.tags_service()
 
         try:
             tags = tags_service.list()
         except Exception as e:
-            logger.error(f"获取资源标签失败: {e}")
+            logger.error(f"Failed to list resource tags: {e}")
             return []
 
         result = []
@@ -800,29 +800,29 @@ class RbacMCP(BaseMCP):
 
         return result
 
-    # ── User 扩展管理 ────────────────────────────────────────────────────────
+    # -- Extended user management --------------------------------------------------------
 
     @require_connection
     def create_user(self, user_name: str, domain: str,
                    email: str = None, department: str = None) -> Dict[str, Any]:
-        """创建用户
+        """Create user
 
         Args:
-            user_name: 用户名（格式：user@domain）
-            domain: 域名称
-            email: 邮箱地址
-            department: 部门
+            user_name: User name (format: user@domain)
+            domain: Domain name
+            email: Email address
+            department: Department
 
         Returns:
-            创建结果
+            Creation result
         """
         users_service = self.connection.system_service().users_service()
 
-        # 查找域
+        # Find the domain
         domains_service = self.connection.system_service().domains_service()
         domains = domains_service.list(search=f"name={_sanitize_search_value(domain)}")
         if not domains:
-            raise ValueError(f"域不存在: {domain}")
+            raise ValueError(f"Domain not found: {domain}")
 
         try:
             user = users_service.add(
@@ -836,28 +836,28 @@ class RbacMCP(BaseMCP):
 
             return {
                 "success": True,
-                "message": f"用户 {user_name} 已创建",
+                "message": f"User {user_name} created",
                 "user_id": user.id,
             }
         except Exception as e:
-            raise RuntimeError(f"创建用户失败: {e}")
+            raise RuntimeError(f"Failed to create user: {e}")
 
     @require_connection
     def update_user(self, name_or_id: str, email: str = None,
                    department: str = None) -> Dict[str, Any]:
-        """更新用户
+        """Update user
 
         Args:
-            name_or_id: 用户名称或 ID
-            email: 新邮箱
-            department: 新部门
+            name_or_id: User name or ID
+            email: New email
+            department: New department
 
         Returns:
-            更新结果
+            Update result
         """
         user = self._find_user(name_or_id)
         if not user:
-            raise ValueError(f"用户不存在: {name_or_id}")
+            raise ValueError(f"User not found: {name_or_id}")
 
         users_service = self.connection.system_service().users_service()
         user_service = users_service.user_service(user.id)
@@ -869,46 +869,46 @@ class RbacMCP(BaseMCP):
 
         try:
             user_service.update(user)
-            return {"success": True, "message": f"用户已更新"}
+            return {"success": True, "message": f"User updated"}
         except Exception as e:
-            raise RuntimeError(f"更新用户失败: {e}")
+            raise RuntimeError(f"Failed to update user: {e}")
 
     @require_connection
     def delete_user(self, name_or_id: str) -> Dict[str, Any]:
-        """删除用户
+        """Delete user
 
         Args:
-            name_or_id: 用户名称或 ID
+            name_or_id: User name or ID
 
         Returns:
-            删除结果
+            Deletion result
         """
         user = self._find_user(name_or_id)
         if not user:
-            raise ValueError(f"用户不存在: {name_or_id}")
+            raise ValueError(f"User not found: {name_or_id}")
 
         users_service = self.connection.system_service().users_service()
         user_service = users_service.user_service(user.id)
 
         try:
             user_service.remove()
-            return {"success": True, "message": f"用户 {user.name} 已删除"}
+            return {"success": True, "message": f"User {user.name} deleted"}
         except Exception as e:
-            raise RuntimeError(f"删除用户失败: {e}")
+            raise RuntimeError(f"Failed to delete user: {e}")
 
     @require_connection
     def list_user_groups(self, name_or_id: str) -> List[Dict]:
-        """列出用户所属的组
+        """List groups for a user
 
         Args:
-            name_or_id: 用户名称或 ID
+            name_or_id: User name or ID
 
         Returns:
-            组列表
+            List of groups
         """
         user = self._find_user(name_or_id)
         if not user:
-            raise ValueError(f"用户不存在: {name_or_id}")
+            raise ValueError(f"User not found: {name_or_id}")
 
         users_service = self.connection.system_service().users_service()
         user_service = users_service.user_service(user.id)
@@ -917,7 +917,7 @@ class RbacMCP(BaseMCP):
         try:
             groups = groups_service.list()
         except Exception as e:
-            logger.error(f"获取用户组失败: {e}")
+            logger.error(f"Failed to get user groups: {e}")
             return []
 
         return [
@@ -929,26 +929,26 @@ class RbacMCP(BaseMCP):
             for g in groups
         ]
 
-    # ── Role 扩展管理 ────────────────────────────────────────────────────────
+    # -- Extended role management --------------------------------------------------------
 
     @require_connection
     def update_role(self, name_or_id: str, new_name: str = None,
                    description: str = None,
                    administrative: bool = None) -> Dict[str, Any]:
-        """更新角色
+        """Update role
 
         Args:
-            name_or_id: 角色名称或 ID
-            new_name: 新名称
-            description: 新描述
-            administrative: 是否为管理员角色
+            name_or_id: Role name or ID
+            new_name: New name
+            description: New description
+            administrative: Whether it is an administrative role
 
         Returns:
-            更新结果
+            Update result
         """
         role = self._find_role(name_or_id)
         if not role:
-            raise ValueError(f"角色不存在: {name_or_id}")
+            raise ValueError(f"Role not found: {name_or_id}")
 
         roles_service = self.connection.system_service().roles_service()
         role_service = roles_service.role_service(role.id)
@@ -962,65 +962,65 @@ class RbacMCP(BaseMCP):
 
         try:
             role_service.update(role)
-            return {"success": True, "message": f"角色已更新"}
+            return {"success": True, "message": f"Role updated"}
         except Exception as e:
-            raise RuntimeError(f"更新角色失败: {e}")
+            raise RuntimeError(f"Failed to update role: {e}")
 
-    # ── Filter 管理 ──────────────────────────────────────────────────────────
+    # -- Filter management ----------------------------------------------------------
 
     @require_connection
     def list_filters(self) -> List[Dict]:
-        """列出权限过滤器
+        """List permission filters
 
         Returns:
-            过滤器列表
+            List of filters
         """
         # oVirt 4.5 REST exposes no permission-filter collection (the API root
         # lists no `filters`, and `/api/filters`, `/api/permissionfilters`
         # are 404), so SystemService has no `filters_service`. Fail loudly
         # instead of crashing with AttributeError or reporting an empty list.
         raise ValueError(
-            "权限过滤器不可用: 当前 oVirt API 未提供 permission filters 集合"
+            "Permission filters unavailable: current oVirt API does not provide a permission filters collection"
         )
 
 
-# MCP 工具注册表
+# MCP tool registry
 MCP_TOOLS = {
-    # User 管理
-    "user_list": {"method": "list_users", "description": "列出用户"},
-    "user_get": {"method": "get_user", "description": "获取用户详情"},
-    "user_create": {"method": "create_user", "description": "创建用户"},
-    "user_update": {"method": "update_user", "description": "更新用户"},
-    "user_delete": {"method": "delete_user", "description": "删除用户"},
-    "user_groups": {"method": "list_user_groups", "description": "列出用户所属的组"},
+    # User management
+    "user_list": {"method": "list_users", "description": "List users"},
+    "user_get": {"method": "get_user", "description": "Get user details"},
+    "user_create": {"method": "create_user", "description": "Create user"},
+    "user_update": {"method": "update_user", "description": "Update user"},
+    "user_delete": {"method": "delete_user", "description": "Delete user"},
+    "user_groups": {"method": "list_user_groups", "description": "List groups for a user"},
 
-    # Group 管理
-    "group_list": {"method": "list_groups", "description": "列出用户组"},
-    "group_get": {"method": "get_group", "description": "获取用户组详情"},
+    # Group management
+    "group_list": {"method": "list_groups", "description": "List groups"},
+    "group_get": {"method": "get_group", "description": "Get group details"},
 
-    # Role 管理
-    "role_list": {"method": "list_roles", "description": "列出角色"},
-    "role_get": {"method": "get_role", "description": "获取角色详情"},
-    "role_create": {"method": "create_role", "description": "创建角色"},
-    "role_update": {"method": "update_role", "description": "更新角色"},
-    "role_delete": {"method": "delete_role", "description": "删除角色"},
+    # Role management
+    "role_list": {"method": "list_roles", "description": "List roles"},
+    "role_get": {"method": "get_role", "description": "Get role details"},
+    "role_create": {"method": "create_role", "description": "Create role"},
+    "role_update": {"method": "update_role", "description": "Update role"},
+    "role_delete": {"method": "delete_role", "description": "Delete role"},
 
-    # Permit 管理
-    "permit_list": {"method": "list_permits", "description": "列出所有权限单元"},
+    # Permit management
+    "permit_list": {"method": "list_permits", "description": "List all permits"},
 
-    # Permission 管理
-    "permission_list": {"method": "list_permissions", "description": "列出资源的权限"},
-    "permission_assign": {"method": "assign_permission", "description": "分配权限"},
-    "permission_revoke": {"method": "revoke_permission", "description": "撤销权限"},
+    # Permission management
+    "permission_list": {"method": "list_permissions", "description": "List resource permissions"},
+    "permission_assign": {"method": "assign_permission", "description": "Assign permission"},
+    "permission_revoke": {"method": "revoke_permission", "description": "Revoke permission"},
 
-    # Tag 管理
-    "tag_list": {"method": "list_tags", "description": "列出所有标签"},
-    "tag_create": {"method": "create_tag", "description": "创建标签"},
-    "tag_delete": {"method": "delete_tag", "description": "删除标签"},
-    "tag_assign": {"method": "assign_tag", "description": "为资源分配标签"},
-    "tag_unassign": {"method": "unassign_tag", "description": "移除资源的标签"},
-    "tag_list_resources": {"method": "list_resource_tags", "description": "列出资源的标签"},
+    # Tag management
+    "tag_list": {"method": "list_tags", "description": "List all tags"},
+    "tag_create": {"method": "create_tag", "description": "Create tag"},
+    "tag_delete": {"method": "delete_tag", "description": "Delete tag"},
+    "tag_assign": {"method": "assign_tag", "description": "Assign tag to resource"},
+    "tag_unassign": {"method": "unassign_tag", "description": "Remove tag from resource"},
+    "tag_list_resources": {"method": "list_resource_tags", "description": "List resource tags"},
 
-    # Filter 管理
-    "filter_list": {"method": "list_filters", "description": "列出权限过滤器"},
+    # Filter management
+    "filter_list": {"method": "list_filters", "description": "List permission filters"},
 }

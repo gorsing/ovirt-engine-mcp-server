@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Tests for DataCenterMCP class - 数据中心管理模块测试."""
+"""Tests for DataCenterMCP class - data center management module tests."""
 import pytest
 from unittest.mock import MagicMock, patch
 
 
 def _create_mock_datacenter(dc_id="dc-123", name="Default", status="up", storage_type="nfs"):
-    """创建 mock DataCenter 对象"""
+    """Create a mock DataCenter object"""
     mock_dc = MagicMock()
     mock_dc.id = dc_id
     mock_dc.name = name
@@ -24,7 +24,7 @@ def _create_mock_datacenter(dc_id="dc-123", name="Default", status="up", storage
 
 
 def _create_mock_cluster(cluster_id="cluster-123", name="Default"):
-    """创建 mock Cluster 对象"""
+    """Create a mock Cluster object"""
     mock_cluster = MagicMock()
     mock_cluster.id = cluster_id
     mock_cluster.name = name
@@ -32,7 +32,7 @@ def _create_mock_cluster(cluster_id="cluster-123", name="Default"):
 
 
 def _create_mock_storage_domain(sd_id="sd-123", name="storage1", sd_type="data"):
-    """创建 mock StorageDomain 对象"""
+    """Create a mock StorageDomain object"""
     mock_sd = MagicMock()
     mock_sd.id = sd_id
     mock_sd.name = name
@@ -42,10 +42,10 @@ def _create_mock_storage_domain(sd_id="sd-123", name="storage1", sd_type="data")
 
 
 class TestDataCenterMCPList:
-    """测试 list_datacenters 方法"""
+    """Test list_datacenters method"""
 
     def test_list_datacenters_empty(self):
-        """测试空数据中心列表"""
+        """Test empty data center list"""
         from ovirt_engine_mcp_server.mcp_datacenter import DataCenterMCP
 
         mock_ovirt = MagicMock()
@@ -60,7 +60,7 @@ class TestDataCenterMCPList:
         assert result == []
 
     def test_list_datacenters_with_data(self):
-        """测试有数据的数据中心列表"""
+        """Test data center list with data"""
         from ovirt_engine_mcp_server.mcp_datacenter import DataCenterMCP
 
         mock_dc = _create_mock_datacenter()
@@ -79,7 +79,7 @@ class TestDataCenterMCPList:
         assert result[0]["storage_type"] == "nfs"
 
     def test_list_datacenters_not_connected(self):
-        """测试未连接时抛出异常"""
+        """Test exception raised when not connected"""
         from ovirt_engine_mcp_server.mcp_datacenter import DataCenterMCP
         from ovirt_engine_mcp_server.errors import OvirtConnectionError
 
@@ -93,10 +93,10 @@ class TestDataCenterMCPList:
 
 
 class TestDataCenterMCPGet:
-    """测试 get_datacenter 方法"""
+    """Test get_datacenter method"""
 
     def test_get_datacenter_by_id(self):
-        """测试通过 ID 获取数据中心"""
+        """Test get data center by ID"""
         from ovirt_engine_mcp_server.mcp_datacenter import DataCenterMCP
 
         mock_dc = _create_mock_datacenter()
@@ -115,7 +115,7 @@ class TestDataCenterMCPGet:
 
         mock_dcs_service = MagicMock()
         mock_dcs_service.data_center_service.return_value = mock_dc_service
-        mock_dcs_service.list.return_value = []  # 名称搜索不返回结果
+        mock_dcs_service.list.return_value = []  # name search returns no results
 
         mock_ovirt.connection.system_service.return_value.data_centers_service.return_value = mock_dcs_service
 
@@ -129,7 +129,7 @@ class TestDataCenterMCPGet:
         assert len(result["storage_domains"]) == 1
 
     def test_get_datacenter_not_found(self):
-        """测试数据中心不存在"""
+        """Test data center not found"""
         from ovirt_engine_mcp_server.mcp_datacenter import DataCenterMCP
 
         mock_ovirt = MagicMock()
@@ -148,10 +148,10 @@ class TestDataCenterMCPGet:
 
 
 class TestDataCenterMCPCreate:
-    """测试 create_datacenter 方法"""
+    """Test create_datacenter method"""
 
     def test_create_datacenter_success(self):
-        """测试创建数据中心成功"""
+        """Test create data center success"""
         from ovirt_engine_mcp_server.mcp_datacenter import DataCenterMCP
 
         mock_dc = _create_mock_datacenter(name="NewDC")
@@ -160,7 +160,7 @@ class TestDataCenterMCPCreate:
         mock_ovirt.connected = True
 
         mock_dcs_service = MagicMock()
-        mock_dcs_service.list.return_value = []  # 名称不冲突
+        mock_dcs_service.list.return_value = []  # name does not conflict
         mock_dcs_service.add.return_value = mock_dc
 
         mock_ovirt.connection.system_service.return_value.data_centers_service.return_value = mock_dcs_service
@@ -173,7 +173,7 @@ class TestDataCenterMCPCreate:
         mock_dcs_service.add.assert_called_once()
 
     def test_create_datacenter_already_exists(self):
-        """测试创建已存在的数据中心"""
+        """Test create an already existing data center"""
         from ovirt_engine_mcp_server.mcp_datacenter import DataCenterMCP
 
         mock_dc = _create_mock_datacenter()
@@ -182,17 +182,17 @@ class TestDataCenterMCPCreate:
         mock_ovirt.connected = True
 
         mock_dcs_service = MagicMock()
-        mock_dcs_service.list.return_value = [mock_dc]  # 名称已存在
+        mock_dcs_service.list.return_value = [mock_dc]  # name already exists
 
         mock_ovirt.connection.system_service.return_value.data_centers_service.return_value = mock_dcs_service
 
         dc_mcp = DataCenterMCP(mock_ovirt)
 
-        with pytest.raises(ValueError, match="已存在"):
+        with pytest.raises(ValueError, match="already exists"):
             dc_mcp.create_datacenter("Default")
 
     def test_create_datacenter_invalid_storage_type(self):
-        """测试无效的存储类型"""
+        """Test invalid storage type"""
         from ovirt_engine_mcp_server.mcp_datacenter import DataCenterMCP
 
         mock_ovirt = MagicMock()
@@ -200,15 +200,15 @@ class TestDataCenterMCPCreate:
 
         dc_mcp = DataCenterMCP(mock_ovirt)
 
-        with pytest.raises(ValueError, match="无效的存储类型"):
+        with pytest.raises(ValueError, match="Invalid storage type"):
             dc_mcp.create_datacenter("NewDC", storage_type="invalid")
 
 
 class TestDataCenterMCPUpdate:
-    """测试 update_datacenter 方法"""
+    """Test update_datacenter method"""
 
     def test_update_datacenter_success(self):
-        """测试更新数据中心成功"""
+        """Test update data center success"""
         from ovirt_engine_mcp_server.mcp_datacenter import DataCenterMCP
 
         mock_dc = _create_mock_datacenter()
@@ -219,7 +219,7 @@ class TestDataCenterMCPUpdate:
 
         mock_dcs_service = MagicMock()
         mock_dcs_service.data_center_service.return_value.get.side_effect = [mock_dc, mock_dc]
-        mock_dcs_service.list.return_value = []  # ID 查找成功
+        mock_dcs_service.list.return_value = []  # ID lookup succeeds
 
         mock_ovirt.connection.system_service.return_value.data_centers_service.return_value = mock_dcs_service
 
@@ -229,7 +229,7 @@ class TestDataCenterMCPUpdate:
         assert result["success"] is True
 
     def test_update_datacenter_not_found(self):
-        """测试更新不存在的数据中心"""
+        """Test update a non-existent data center"""
         from ovirt_engine_mcp_server.mcp_datacenter import DataCenterMCP
 
         mock_ovirt = MagicMock()
@@ -243,15 +243,15 @@ class TestDataCenterMCPUpdate:
 
         dc_mcp = DataCenterMCP(mock_ovirt)
 
-        with pytest.raises(ValueError, match="不存在"):
+        with pytest.raises(ValueError, match="not found"):
             dc_mcp.update_datacenter("nonexistent")
 
 
 class TestDataCenterMCPDelete:
-    """测试 delete_datacenter 方法"""
+    """Test delete_datacenter method"""
 
     def test_delete_datacenter_success(self):
-        """测试删除数据中心成功"""
+        """Test delete data center success"""
         from ovirt_engine_mcp_server.mcp_datacenter import DataCenterMCP
 
         mock_dc = _create_mock_datacenter()
@@ -270,10 +270,10 @@ class TestDataCenterMCPDelete:
         result = dc_mcp.delete_datacenter("dc-123")
 
         assert result["success"] is True
-        mock_dc_service.remove.assert_not_called()  # 使用的是 dc_service.remove()
+        mock_dc_service.remove.assert_not_called()  # dc_service.remove() is used
 
     def test_delete_datacenter_not_found(self):
-        """测试删除不存在的数据中心"""
+        """Test delete a non-existent data center"""
         from ovirt_engine_mcp_server.mcp_datacenter import DataCenterMCP
 
         mock_ovirt = MagicMock()
@@ -287,15 +287,15 @@ class TestDataCenterMCPDelete:
 
         dc_mcp = DataCenterMCP(mock_ovirt)
 
-        with pytest.raises(ValueError, match="不存在"):
+        with pytest.raises(ValueError, match="not found"):
             dc_mcp.delete_datacenter("nonexistent")
 
 
 class TestDataCenterMCPTools:
-    """测试 MCP_TOOLS 注册表"""
+    """Test MCP_TOOLS registry"""
 
     def test_mcp_tools_defined(self):
-        """测试 MCP 工具注册表已定义"""
+        """Test MCP tool registry is defined"""
         from ovirt_engine_mcp_server.mcp_datacenter import MCP_TOOLS
 
         expected_tools = [

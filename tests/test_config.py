@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tests for config module - 配置模块测试."""
+"""Tests for config module."""
 import pytest
 import os
 import tempfile
@@ -7,10 +7,10 @@ from unittest.mock import patch
 
 
 class TestConfigDataclass:
-    """测试 Config 数据类"""
+    """Tests for the Config dataclass."""
 
     def test_config_defaults(self):
-        """测试默认配置值"""
+        """Test default configuration values."""
         from ovirt_engine_mcp_server.config import Config
 
         config = Config()
@@ -24,7 +24,7 @@ class TestConfigDataclass:
         assert config.mcp_log_level == "INFO"
 
     def test_config_with_values(self):
-        """测试带值的配置"""
+        """Test configuration with values."""
         from ovirt_engine_mcp_server.config import Config
 
         config = Config(
@@ -45,10 +45,10 @@ class TestConfigDataclass:
 
 
 class TestLoadConfig:
-    """测试 load_config 函数"""
+    """Tests for the load_config function."""
 
     def test_load_config_from_env(self):
-        """测试从环境变量加载配置"""
+        """Test loading configuration from environment variables."""
         from ovirt_engine_mcp_server.config import load_config, Config
 
         env_vars = {
@@ -61,7 +61,7 @@ class TestLoadConfig:
         }
 
         with patch.dict(os.environ, env_vars, clear=False):
-            # 不存在的配置文件路径，只从环境变量加载
+            # Nonexistent config path; load environment variables only
             config = load_config("/nonexistent/config.yaml")
 
         assert config.ovirt_engine_url == "https://ovirt.env.test"
@@ -72,7 +72,7 @@ class TestLoadConfig:
         assert config.mcp_log_level == "WARNING"
 
     def test_load_config_from_yaml(self):
-        """测试从 YAML 文件加载配置"""
+        """Test loading configuration from a YAML file."""
         from ovirt_engine_mcp_server.config import load_config
 
         yaml_content = """
@@ -95,7 +95,7 @@ mcp_log_level: ERROR
         assert config.mcp_log_level == "ERROR"
 
     def test_load_config_env_overrides_yaml(self):
-        """测试环境变量覆盖 YAML 配置"""
+        """Test environment variables overriding YAML configuration."""
         from ovirt_engine_mcp_server.config import load_config
 
         yaml_content = """
@@ -115,17 +115,17 @@ ovirt_engine_timeout: 50
             with patch.dict(os.environ, env_vars, clear=False):
                 config = load_config(f.name)
 
-        # 环境变量覆盖
+        # Environment overrides
         assert config.ovirt_engine_user == "env_override_user"
         assert config.ovirt_engine_timeout == 99
-        # YAML 值保留
+        # YAML values retained
         assert config.ovirt_engine_url == "https://ovirt.yaml.test"
 
     def test_load_config_missing_file(self):
-        """测试配置文件不存在时使用默认值"""
+        """Test defaults when the config file does not exist."""
         from ovirt_engine_mcp_server.config import load_config
 
-        # 清理环境变量
+        # Clear environment variables
         env_vars = {k: "" for k in [
             "OVIRT_ENGINE_URL", "OVIRT_ENGINE_USER", "OVIRT_ENGINE_PASSWORD",
             "OVIRT_ENGINE_CA_FILE", "OVIRT_ENGINE_TIMEOUT", "OVIRT_ENGINE_INSECURE",
@@ -135,12 +135,12 @@ ovirt_engine_timeout: 50
         with patch.dict(os.environ, env_vars, clear=True):
             config = load_config("/nonexistent/config.yaml")
 
-        # 使用默认值
+        # Use default values
         assert config.ovirt_engine_url == ""
         assert config.ovirt_engine_timeout == 30
 
     def test_load_config_invalid_yaml(self):
-        """测试无效 YAML 文件"""
+        """Test an invalid YAML file."""
         from ovirt_engine_mcp_server.config import load_config
 
         invalid_yaml = """
@@ -150,17 +150,17 @@ this is not: valid yaml: : :
         with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
             f.write(invalid_yaml)
             f.flush()
-            # 不应该抛出异常，使用默认值
+            # Should not raise an exception; defaults are used
             config = load_config(f.name)
 
         assert config is not None
 
 
 class TestConvertValue:
-    """测试 _convert_value 函数"""
+    """Tests for the _convert_value function."""
 
     def test_convert_bool_from_string_true(self):
-        """测试从字符串转换为布尔值 True"""
+        """Test converting a string to boolean True."""
         from ovirt_engine_mcp_server.config import _convert_value
 
         assert _convert_value("true", bool) is True
@@ -171,7 +171,7 @@ class TestConvertValue:
         assert _convert_value("on", bool) is True
 
     def test_convert_bool_from_string_false(self):
-        """测试从字符串转换为布尔值 False"""
+        """Test converting a string to boolean False."""
         from ovirt_engine_mcp_server.config import _convert_value
 
         assert _convert_value("false", bool) is False
@@ -180,14 +180,14 @@ class TestConvertValue:
         assert _convert_value("no", bool) is False
 
     def test_convert_bool_from_bool(self):
-        """测试布尔值保持不变"""
+        """Test that booleans stay unchanged."""
         from ovirt_engine_mcp_server.config import _convert_value
 
         assert _convert_value(True, bool) is True
         assert _convert_value(False, bool) is False
 
     def test_convert_int_from_string(self):
-        """测试从字符串转换为整数"""
+        """Test converting a string to an integer."""
         from ovirt_engine_mcp_server.config import _convert_value
 
         assert _convert_value("42", int) == 42
@@ -195,14 +195,14 @@ class TestConvertValue:
         assert _convert_value("-10", int) == -10
 
     def test_convert_string(self):
-        """测试字符串保持不变"""
+        """Test that strings stay unchanged."""
         from ovirt_engine_mcp_server.config import _convert_value
 
         assert _convert_value("hello", str) == "hello"
         assert _convert_value(123, str) == "123"
 
     def test_convert_none(self):
-        """测试 None 值"""
+        """Test None values."""
         from ovirt_engine_mcp_server.config import _convert_value
 
         assert _convert_value(None, str) is None
@@ -211,10 +211,10 @@ class TestConvertValue:
 
 
 class TestSanitizeLogMessage:
-    """测试 sanitize_log_message 函数"""
+    """Tests for the sanitize_log_message function."""
 
     def test_sanitize_password(self):
-        """测试脱敏密码"""
+        """Test masking a password."""
         from ovirt_engine_mcp_server.config import sanitize_log_message
 
         msg = "Connection with password=secret123 failed"
@@ -224,7 +224,7 @@ class TestSanitizeLogMessage:
         assert "***" in result
 
     def test_sanitize_password_colon(self):
-        """测试脱敏密码（冒号格式）"""
+        """Test masking a password (colon format)."""
         from ovirt_engine_mcp_server.config import sanitize_log_message
 
         msg = "Error: password: mypassword"
@@ -233,7 +233,7 @@ class TestSanitizeLogMessage:
         assert "mypassword" not in result
 
     def test_sanitize_api_key(self):
-        """测试脱敏 API Key"""
+        """Test masking an API key."""
         from ovirt_engine_mcp_server.config import sanitize_log_message
 
         msg = "Using api_key=abc123xyz"
@@ -243,7 +243,7 @@ class TestSanitizeLogMessage:
         assert "***" in result
 
     def test_sanitize_token(self):
-        """测试脱敏 Token"""
+        """Test masking a token."""
         from ovirt_engine_mcp_server.config import sanitize_log_message
 
         msg = "Auth token=bearer_token_here"
@@ -252,7 +252,7 @@ class TestSanitizeLogMessage:
         assert "bearer_token_here" not in result
 
     def test_sanitize_secret(self):
-        """测试脱敏 Secret"""
+        """Test masking a secret."""
         from ovirt_engine_mcp_server.config import sanitize_log_message
 
         msg = "secret=my_secret_value"
@@ -261,7 +261,7 @@ class TestSanitizeLogMessage:
         assert "my_secret_value" not in result
 
     def test_no_sensitive_data(self):
-        """测试无敏感数据的消息"""
+        """Test a message without sensitive data."""
         from ovirt_engine_mcp_server.config import sanitize_log_message
 
         msg = "Connected to server successfully"
@@ -270,7 +270,7 @@ class TestSanitizeLogMessage:
         assert result == msg
 
     def test_case_insensitive(self):
-        """测试大小写不敏感"""
+        """Test case-insensitive masking."""
         from ovirt_engine_mcp_server.config import sanitize_log_message
 
         msg = "PASSWORD=Secret123 and Api_Key=xyz"
@@ -281,10 +281,10 @@ class TestSanitizeLogMessage:
 
 
 class TestSensitiveFields:
-    """测试敏感字段定义"""
+    """Tests for sensitive field definitions."""
 
     def test_sensitive_fields_defined(self):
-        """测试敏感字段列表已定义"""
+        """Test that the sensitive fields list is defined."""
         from ovirt_engine_mcp_server.config import SENSITIVE_FIELDS
 
         assert "ovirt_engine_password" in SENSITIVE_FIELDS

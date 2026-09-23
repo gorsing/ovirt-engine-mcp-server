@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tests for TemplateExtendedMCP - 模板扩展模块测试."""
+"""Tests for TemplateExtendedMCP - template extensions module tests."""
 from types import SimpleNamespace
 
 

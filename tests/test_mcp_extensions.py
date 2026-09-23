@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tests for MCP extensions - 网络和集群扩展模块测试."""
+"""Tests for MCP extensions - network and cluster extension module tests."""
 from types import SimpleNamespace
 
 import pytest
@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 
 
 def _create_mock_network(net_id="net-123", name="ovirtmgmt"):
-    """创建 mock Network 对象"""
+    """Create a mock Network object"""
     mock_net = MagicMock()
     mock_net.id = net_id
     mock_net.name = name
@@ -25,7 +25,7 @@ def _create_mock_network(net_id="net-123", name="ovirtmgmt"):
 
 
 def _create_mock_cluster(cluster_id="cluster-123", name="Default"):
-    """创建 mock Cluster 对象"""
+    """Create a mock Cluster object"""
     mock_cluster = MagicMock()
     mock_cluster.id = cluster_id
     mock_cluster.name = name
@@ -44,7 +44,7 @@ def _create_mock_cluster(cluster_id="cluster-123", name="Default"):
 
 
 def _create_mock_template(template_id="tpl-123", name="CentOS8"):
-    """创建 mock Template 对象"""
+    """Create a mock Template object"""
     mock_tpl = MagicMock()
     mock_tpl.id = template_id
     mock_tpl.name = name
@@ -62,10 +62,10 @@ def _create_mock_template(template_id="tpl-123", name="CentOS8"):
 
 
 class TestNetworkMCP:
-    """测试 NetworkMCP 类"""
+    """Test NetworkMCP class"""
 
     def test_list_networks(self):
-        """测试列出网络"""
+        """Test list networks"""
         from ovirt_engine_mcp_server.mcp_extensions import NetworkMCP
 
         mock_networks = [_create_mock_network()]
@@ -82,7 +82,7 @@ class TestNetworkMCP:
         assert result[0]["name"] == "ovirtmgmt"
 
     def test_list_vnics(self):
-        """测试列出 VM 网卡"""
+        """Test list VM NICs"""
         from ovirt_engine_mcp_server.mcp_extensions import NetworkMCP
 
         mock_nic = MagicMock()
@@ -110,7 +110,7 @@ class TestNetworkMCP:
         assert result[0]["mac"] == "00:11:22:33:44:55"
 
     def test_list_vnics_vm_not_found(self):
-        """测试 VM 不存在时列出网卡"""
+        """Test list NICs when VM does not exist"""
         from ovirt_engine_mcp_server.mcp_extensions import NetworkMCP
 
         mock_ovirt = MagicMock()
@@ -122,7 +122,7 @@ class TestNetworkMCP:
             net_mcp.list_vnics("nonexistent")
 
     def test_create_network(self):
-        """测试创建网络"""
+        """Test create network"""
         from ovirt_engine_mcp_server.mcp_extensions import NetworkMCP
 
         mock_dc = MagicMock()
@@ -141,7 +141,7 @@ class TestNetworkMCP:
         assert "network_id" in result
 
     def test_create_network_datacenter_not_found(self):
-        """测试数据中心不存在时创建网络"""
+        """Test create network when data center does not exist"""
         from ovirt_engine_mcp_server.mcp_extensions import NetworkMCP
 
         mock_ovirt = MagicMock()
@@ -150,11 +150,11 @@ class TestNetworkMCP:
 
         net_mcp = NetworkMCP(mock_ovirt)
 
-        with pytest.raises(ValueError, match="数据中心不存在"):
+        with pytest.raises(ValueError, match="Data center not found"):
             net_mcp.create_network("new-net", "Nonexistent")
 
     def test_update_network(self):
-        """测试更新网络"""
+        """Test update network"""
         from ovirt_engine_mcp_server.mcp_extensions import NetworkMCP
 
         mock_network = _create_mock_network()
@@ -170,7 +170,7 @@ class TestNetworkMCP:
         assert result["success"] is True
 
     def test_delete_network(self):
-        """测试删除网络"""
+        """Test delete network"""
         from ovirt_engine_mcp_server.mcp_extensions import NetworkMCP
 
         mock_network = _create_mock_network()
@@ -186,10 +186,10 @@ class TestNetworkMCP:
 
 
 class TestClusterMCP:
-    """测试 ClusterMCP 类"""
+    """Test ClusterMCP class"""
 
     def test_list_clusters(self):
-        """测试列出集群"""
+        """Test list clusters"""
         from ovirt_engine_mcp_server.mcp_extensions import ClusterMCP
 
         mock_ovirt = MagicMock()
@@ -204,7 +204,7 @@ class TestClusterMCP:
         assert result[0]["name"] == "Default"
 
     def test_get_cluster(self):
-        """测试获取集群详情"""
+        """Test get cluster details"""
         from ovirt_engine_mcp_server.mcp_extensions import ClusterMCP
 
         mock_cluster = _create_mock_cluster()
@@ -221,7 +221,7 @@ class TestClusterMCP:
         assert "cpu" in result
 
     def test_get_cluster_not_found(self):
-        """测试集群不存在"""
+        """Test cluster does not exist"""
         from ovirt_engine_mcp_server.mcp_extensions import ClusterMCP
 
         mock_ovirt = MagicMock()
@@ -234,7 +234,7 @@ class TestClusterMCP:
         assert result is None
 
     def test_list_cluster_hosts(self):
-        """测试列出集群主机"""
+        """Test list cluster hosts"""
         from ovirt_engine_mcp_server.mcp_extensions import ClusterMCP
 
         mock_hosts = [{"id": "host-123", "name": "host1"}]
@@ -249,7 +249,7 @@ class TestClusterMCP:
         mock_ovirt.list_hosts.assert_called_with(cluster="Default")
 
     def test_list_cluster_vms(self):
-        """测试列出集群虚拟机"""
+        """Test list cluster VMs"""
         from ovirt_engine_mcp_server.mcp_extensions import ClusterMCP
 
         mock_vms = [{"id": "vm-123", "name": "vm1"}]
@@ -263,7 +263,7 @@ class TestClusterMCP:
         assert len(result) == 1
 
     def test_get_cluster_cpu_load(self):
-        """测试获取集群 CPU 负载"""
+        """Test get cluster CPU load"""
         from ovirt_engine_mcp_server.mcp_extensions import ClusterMCP
 
         mock_hosts = [
@@ -282,7 +282,7 @@ class TestClusterMCP:
         assert result["cpu_load_avg"] == 40.0
 
     def test_get_cluster_cpu_load_empty(self):
-        """测试空集群的 CPU 负载"""
+        """Test CPU load of an empty cluster"""
         from ovirt_engine_mcp_server.mcp_extensions import ClusterMCP
 
         mock_ovirt = MagicMock()
@@ -295,7 +295,7 @@ class TestClusterMCP:
         assert result["host_count"] == 0
 
     def test_get_cluster_memory_usage(self):
-        """测试获取集群内存使用"""
+        """Test get cluster memory usage"""
         from ovirt_engine_mcp_server.mcp_extensions import ClusterMCP
 
         mock_hosts = [
@@ -315,10 +315,10 @@ class TestClusterMCP:
 
 
 class TestTemplateMCP:
-    """测试 TemplateMCP 类"""
+    """Test TemplateMCP class"""
 
     def test_list_templates(self):
-        """测试列出模板"""
+        """Test list templates"""
         from ovirt_engine_mcp_server.mcp_extensions import TemplateMCP
 
         mock_ovirt = MagicMock()
@@ -333,7 +333,7 @@ class TestTemplateMCP:
         assert result[0]["name"] == "CentOS8"
 
     def test_get_template(self):
-        """测试获取模板详情"""
+        """Test get template details"""
         from ovirt_engine_mcp_server.mcp_extensions import TemplateMCP
 
         mock_tpl = _create_mock_template()
@@ -350,7 +350,7 @@ class TestTemplateMCP:
         assert result["cpu_cores"] == 2
 
     def test_get_template_not_found(self):
-        """测试模板不存在"""
+        """Test template does not exist"""
         from ovirt_engine_mcp_server.mcp_extensions import TemplateMCP
 
         mock_ovirt = MagicMock()
@@ -363,7 +363,7 @@ class TestTemplateMCP:
         assert result is None
 
     def test_create_vm_from_template(self):
-        """测试从模板创建 VM"""
+        """Test create VM from template"""
         from ovirt_engine_mcp_server.mcp_extensions import TemplateMCP
 
         mock_ovirt = MagicMock()
@@ -392,10 +392,10 @@ class TestTemplateMCP:
 
 
 class TestMCPExtensionsTools:
-    """测试 MCP_TOOLS 注册表"""
+    """Test MCP_TOOLS registry"""
 
     def test_mcp_tools_defined(self):
-        """测试 MCP 工具注册表已定义"""
+        """Test MCP tool registry is defined"""
         from ovirt_engine_mcp_server.mcp_extensions import MCP_TOOLS
 
         expected_tools = [
@@ -512,7 +512,7 @@ class TestClusterCpuFormatting:
 
         result = self._mcp_for(cluster).get_cluster("Default")
 
-        assert "型号" not in result["cpu"]
+        assert all(str(key).isascii() for key in result["cpu"])
         assert result["cpu"]["model"] == ""
         assert result["cpu"]["architecture"] == "x86_64"
 
@@ -571,7 +571,7 @@ class TestDataCenterScopedQos:
         mock_ovirt.connection.system_service.return_value.qoss_service.assert_not_called()
 
     def test_qos_list_unknown_datacenter_raises(self):
-        with pytest.raises(ValueError, match="数据中心不存在"):
+        with pytest.raises(ValueError, match="Data center not found"):
             self._mcp([], dcs=[])[1].list_qos("no-such-dc")
 
 

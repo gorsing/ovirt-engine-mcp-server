@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-oVirt MCP Server - 事件管理模块
-提供事件查询和告警管理
+oVirt MCP Server - events module
+Provides event queries and alert management
 """
 from typing import Dict, List, Any, Optional
 import logging
@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 
 class EventsMCP(BaseMCP):
-    """事件管理 MCP"""
+    """Events MCP"""
 
     def __init__(self, ovirt_mcp):
         super().__init__(ovirt_mcp)
@@ -27,44 +27,44 @@ class EventsMCP(BaseMCP):
     @require_connection
     def list_events(self, search: str = None, severity: str = None,
                    page: int = 1, page_size: int = 50) -> List[Dict]:
-        """列出事件
+        """List events
 
         Args:
-            search: 搜索条件（可选）
-            severity: 严重级别过滤（error/warning/info/normal/alert）
-            page: 页码，从 1 开始
-            page_size: 每页数量，默认 50
+            search: Search expression (optional)
+            severity: Severity filter (error/warning/info/normal/alert)
+            page: Page number, starting at 1
+            page_size: Items per page, default 50
 
         Returns:
-            事件列表
+            List of events
         """
         events_service = self.connection.system_service().events_service()
 
-        # 构建搜索条件
+        # Build the search query
         search_query = ""
         if search:
             search_query = _sanitize_search_value(search)
 
-        # 获取事件
+        # Fetch events
         try:
-            # SDK 使用 max 参数限制返回数量
+            # SDK uses the max parameter to limit the number of results
             max_results = page * page_size
             events = events_service.list(
                 search=search_query if search_query else None,
                 max=max_results
             )
 
-            # 过滤严重级别
+            # Filter by severity
             if severity:
                 severity_lower = severity.lower()
                 events = [e for e in events if e.severity and e.severity.value.lower() == severity_lower]
 
-            # 分页处理
+            # Apply pagination
             start_idx = (page - 1) * page_size
             events = events[start_idx:start_idx + page_size]
 
         except Exception as e:
-            logger.error(f"获取事件失败: {e}")
+            logger.error(f"Failed to fetch events: {e}")
             events = []
 
         result = []
@@ -87,20 +87,20 @@ class EventsMCP(BaseMCP):
         return result
 
     def get_alerts(self, page: int = 1, page_size: int = 50) -> List[Dict]:
-        """获取告警事件（severity=alert 的所有事件）"""
+        """Get alert events (all events with severity=alert)"""
         return self.list_events(severity="alert", page=page, page_size=page_size)
 
     def get_errors(self, page: int = 1, page_size: int = 50) -> List[Dict]:
-        """获取错误事件"""
+        """Get error events"""
         return self.list_events(severity="error", page=page, page_size=page_size)
 
     def get_warnings(self, page: int = 1, page_size: int = 50) -> List[Dict]:
-        """获取警告事件"""
+        """Get warning events"""
         return self.list_events(severity="warning", page=page, page_size=page_size)
 
     @require_connection
     def get_event(self, event_id: str) -> Optional[Dict]:
-        """获取单个事件详情"""
+        """Get details of a single event"""
         try:
             event_service = self.connection.system_service().events_service().event_service(event_id)
             event = event_service.get()
@@ -129,20 +129,20 @@ class EventsMCP(BaseMCP):
                 "correlation_id": event.correlation_id if hasattr(event, 'correlation_id') else "",
             }
         except Exception as e:
-            logger.debug(f"获取事件失败: {e}")
+            logger.debug(f"Failed to fetch events: {e}")
             return None
 
     def search_events(self, query: str, page: int = 1, page_size: int = 50) -> List[Dict]:
-        """搜索事件
+        """Search events
 
-        支持的搜索字段:
-        - vm.name: 虚拟机名称
-        - host.name: 主机名称
-        - cluster.name: 集群名称
-        - severity: 严重级别
-        - time: 时间范围
+        Supported search fields:
+        - vm.name: VM name
+        - host.name: Host name
+        - cluster.name: Cluster name
+        - severity: Severity
+        - time: Time range
 
-        示例:
+        Examples:
         - "vm.name = myvm"
         - "severity = alert"
         - "time > yesterday"
@@ -151,25 +151,25 @@ class EventsMCP(BaseMCP):
 
     @require_connection
     def get_events_summary(self, hours: int = 24) -> Dict[str, Any]:
-        """获取事件统计摘要
+        """Get event statistics summary
 
         Args:
-            hours: 统计最近 N 小时的事件，默认 24 小时
+            hours: Count events from the last N hours, default 24
 
         Returns:
-            各级别事件数量统计
+            Event counts per severity level
         """
         events_service = self.connection.system_service().events_service()
 
-        # 获取最近的事件（根据 SDK 支持的参数）
+        # Fetch recent events (using SDK-supported parameters)
         try:
-            # 使用 from_date 参数过滤（如果 SDK 支持）
+            # Filter with the from_date parameter (if the SDK supports it)
             events = events_service.list(max=500)
         except Exception as e:
-            logger.error(f"获取事件失败: {e}")
+            logger.error(f"Failed to fetch events: {e}")
             return {"error": str(e)}
 
-        # 统计各级别事件
+        # Count events per severity level
         summary = {
             "total": len(events),
             "alert": 0,
@@ -187,17 +187,17 @@ class EventsMCP(BaseMCP):
             if severity in summary:
                 summary[severity] += 1
 
-            # 按集群统计
+            # Count by cluster
             if event.cluster:
                 cluster_name = event.cluster.name
                 summary["by_cluster"][cluster_name] = summary["by_cluster"].get(cluster_name, 0) + 1
 
-            # 按主机统计
+            # Count by host
             if event.host:
                 host_name = event.host.name
                 summary["by_host"][host_name] = summary["by_host"].get(host_name, 0) + 1
 
-            # 按 VM 统计
+            # Count by VM
             if event.vm:
                 vm_name = event.vm.name
                 summary["by_vm"][vm_name] = summary["by_vm"].get(vm_name, 0) + 1
@@ -206,22 +206,22 @@ class EventsMCP(BaseMCP):
 
     @require_connection
     def acknowledge_event(self, event_id: str) -> Dict[str, Any]:
-        """确认事件"""
+        """Acknowledge an event"""
         try:
             event_service = self.connection.system_service().events_service().event_service(event_id)
-            # 标记为已读/已确认
+            # Mark as read/acknowledged
             event = event_service.get()
             if hasattr(event, 'acknowledged'):
                 event.acknowledged = True
                 event_service.update(event)
 
-            return {"success": True, "message": f"事件 {event_id} 已确认"}
+            return {"success": True, "message": f"Event {event_id} acknowledged"}
         except Exception as e:
-            raise RuntimeError(f"确认事件失败: {e}")
+            raise RuntimeError(f"Failed to acknowledge event: {e}")
 
     @require_connection
     def clear_alerts(self) -> Dict[str, Any]:
-        """清除所有告警事件"""
+        """Clear all alert events"""
         try:
             events_service = self.connection.system_service().events_service()
             alerts = events_service.list(search="severity=alert")
@@ -233,27 +233,27 @@ class EventsMCP(BaseMCP):
                     event_service.remove()
                     cleared_count += 1
                 except Exception as e:
-                    logger.debug(f"清除事件 {alert.id} 失败: {e}")
+                    logger.debug(f"Failed to clear event {alert.id}: {e}")
 
             return {
                 "success": True,
-                "message": f"已清除 {cleared_count} 个告警事件",
+                "message": f"Cleared {cleared_count} alert events",
                 "cleared_count": cleared_count,
             }
         except Exception as e:
-            raise RuntimeError(f"清除告警失败: {e}")
+            raise RuntimeError(f"Failed to clear alerts: {e}")
 
-    # ── 事件订阅管理 ────────────────────────────────────────────────────────
+    # -- Event subscription management --------------------------------------------------------
 
     @require_connection
     def list_event_subscriptions(self, user: str = None) -> List[Dict]:
-        """列出事件订阅
+        """List event subscriptions
 
         Args:
-            user: 用户名称（可选）
+            user: User name (optional)
 
         Returns:
-            事件订阅列表
+            List of event subscriptions
         """
         # oVirt 4.5 REST has no event-subscription collection: SystemService
         # exposes no `event_subscriptions_service`, and both
@@ -261,23 +261,23 @@ class EventsMCP(BaseMCP):
         # return 404. Raise instead of silently reporting an empty list.
         _ = user  # accepted for schema compatibility
         raise ValueError(
-            "事件订阅不可用: 当前 oVirt API 未提供 event subscriptions 集合"
+            "Event subscriptions unavailable: the current oVirt API provides no event subscriptions collection"
         )
 
-    # ── 书签管理 ────────────────────────────────────────────────────────────
+    # -- Bookmark management ------------------------------------------------------------
 
     @require_connection
     def list_bookmarks(self) -> List[Dict]:
-        """列出书签
+        """List bookmarks
 
         Returns:
-            书签列表
+            List of bookmarks
         """
         try:
             bookmarks_service = self.connection.system_service().bookmarks_service()
             bookmarks = bookmarks_service.list()
         except Exception as e:
-            logger.error(f"获取书签列表失败: {e}")
+            logger.error(f"Failed to fetch bookmarks: {e}")
             return []
 
         return [
@@ -290,19 +290,19 @@ class EventsMCP(BaseMCP):
         ]
 
 
-# MCP 工具注册表
+# MCP tool registry
 MCP_TOOLS = {
-    "event_list": {"method": "list_events", "description": "列出事件"},
-    "event_get": {"method": "get_event", "description": "获取事件详情"},
-    "event_search": {"method": "search_events", "description": "搜索事件"},
-    "event_alerts": {"method": "get_alerts", "description": "获取告警事件"},
-    "event_errors": {"method": "get_errors", "description": "获取错误事件"},
-    "event_warnings": {"method": "get_warnings", "description": "获取警告事件"},
-    "event_summary": {"method": "get_events_summary", "description": "获取事件统计摘要"},
-    "event_acknowledge": {"method": "acknowledge_event", "description": "确认事件"},
-    "event_clear_alerts": {"method": "clear_alerts", "description": "清除告警事件"},
+    "event_list": {"method": "list_events", "description": "List events"},
+    "event_get": {"method": "get_event", "description": "Get event details"},
+    "event_search": {"method": "search_events", "description": "Search events"},
+    "event_alerts": {"method": "get_alerts", "description": "Get alert events"},
+    "event_errors": {"method": "get_errors", "description": "Get error events"},
+    "event_warnings": {"method": "get_warnings", "description": "Get warning events"},
+    "event_summary": {"method": "get_events_summary", "description": "Get event statistics summary"},
+    "event_acknowledge": {"method": "acknowledge_event", "description": "Acknowledge event"},
+    "event_clear_alerts": {"method": "clear_alerts", "description": "Clear alert events"},
 
-    # 新增工具
-    "event_subscription_list": {"method": "list_event_subscriptions", "description": "列出事件订阅"},
-    "bookmark_list": {"method": "list_bookmarks", "description": "列出书签"},
+    # Newly added tools
+    "event_subscription_list": {"method": "list_event_subscriptions", "description": "List event subscriptions"},
+    "bookmark_list": {"method": "list_bookmarks", "description": "List bookmarks"},
 }
